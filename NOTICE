@@ -1,0 +1,16 @@
+autonomous-sre-training
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This project includes third-party code, also under the Apache License 2.0:
+
+  - The watcher (k8s-watcher/) contains code copied from the Detection Pack, an
+    add-on for K8sGPT: the events-watcher and configmap-watcher pipelines
+    under k8s-watcher/internal/pack, with modifications.
+
+  - k8s-watcher/internal/k8sgpt/v1alpha1 contains the Result type copied from
+    the K8sGPT operator (github.com/k8sgpt-ai/k8sgpt-operator),
+    Copyright 2023 K8sGPT Contributors.
+
+See k8s-watcher/NOTICE for the source repositories, versions, copied paths and
+the list of modifications.

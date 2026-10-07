@@ -1,0 +1,123 @@
+# watcher — values.yaml
+#
+# One Deployment with two lanes, each writing K8sGPT Results into
+# resultNamespace. It always runs a single replica: a second one would
+# write every Result twice, so setting replicaCount above 1 fails the
+# render.
+
+image:
+  # Built from k8s-watcher/ and loaded into the cluster (`kind load
+  # docker-image`); not published to a registry.
+  repository: k8s-watcher
+  tag: dev
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Namespace where Results are written.
+resultNamespace: k8sgpt-system
+# Log Results instead of writing them.
+dryRun: false
+# debug, info, warn or error.
+logLevel: info
+
+# EV lane: core/v1 events (failing pods, scheduling, volumes, evictions, ...)
+# -> Results.
+ev:
+  enabled: true
+  # /healthz, /readyz and /metrics for this lane.
+  port: 8080
+  # How long one object and reason is reported only once. Keep it at 2m15s
+  # or more, so a slow probe enrichment cannot write an older event over a
+  # newer one.
+  dedupWindow: 5m
+  sweepInterval: 1m
+  # Per-event Prometheus + pod-cache lookup that can promote probe_failure
+  # to fault_class=resource_exhaustion. Also what makes the lane cache Pods.
+  probeEnrichment:
+    enabled: true
+    prometheusUrl: ""
+
+# CM lane: changes to ConfigMaps labelled k8sgpt-detection-pack.io/critical=true
+# -> cm_mutation Results (cm_mutation_deleted for a delete). Data and
+# BinaryData values are replaced by per-key digests in the watcher's cache,
+# so Results show digests, not values. Secrets are not watched.
+cm:
+  enabled: true
+  port: 8081
+
+service:
+  type: ClusterIP
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  # ClusterRole for the lanes' list/watch, Role in resultNamespace for the
+  # Results (see templates/rbac.yaml).
+  create: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# runAsUser is the distroless `nonroot` UID (65532). Also applied to the
+# helm-test pods.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+  readOnlyRootFilesystem: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podLabels: {}
+podAnnotations: {}
+
+extraEnv: []
+
+# ServiceMonitor with one endpoint per enabled lane; each endpoint's `job`
+# label is set to the lane's name below.
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  jobNames:
+    ev: events-watcher
+    cm: configmap-watcher
+
+# `helm test <release>` checks, one per enabled lane (none with dryRun).
+# Each creates a fixture in the <fullname>-test namespace and waits for the
+# lane's Result: a Pod that cannot pull its image (EV), a ConfigMap with the
+# critical label (CM). Both run kubectl from a shell, with a namespaced
+# Role each.
+tests:
+  enabled: true
+  # How long each check waits for its Result.
+  timeoutSeconds: 60
+  # Any image with /bin/sh, awk and kubectl.
+  image:
+    repository: docker.io/alpine/kubectl
+    tag: "1.37.1"
+    # Multi-arch index digest of the tag above.
+    digest: sha256:b57b3bd3cd9f4f02dd444281857126aa78efa4b7b7e6ec57579dd927bf146fc3
+    pullPolicy: IfNotPresent
+
+fullnameOverride: ""
+nameOverride: ""

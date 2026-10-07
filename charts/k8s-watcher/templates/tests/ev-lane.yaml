@@ -1,0 +1,51 @@
+{{- /*
+helm test check for the EV lane. Creates a Pod whose image cannot be
+pulled; the kubelet reports a Failed event, which the lane turns into an
+image_pull_failure Result for that Pod.
+*/ -}}
+{{- if and .Values.tests.enabled (not .Values.dryRun) .Values.ev.enabled }}
+{{- $name := printf "%s-test-ev" (include "k8s-watcher.fullname" .) }}
+{{- $rules := list (dict "apiGroups" (list "") "resources" (list "pods") "verbs" (list "create" "delete")) }}
+{{ include "k8s-watcher.testAccess" (dict "root" . "name" $name "rules" $rules) }}
+---
+{{ include "k8s-watcher.testPod" (dict "root" . "name" $name "script" (include "k8s-watcher.testScript.ev" .)) }}
+{{- end }}
+
+{{- define "k8s-watcher.testScript.ev" -}}
+# A new name per run: the lane reports one Result per object and event
+# reason within ev.dedupWindow.
+pod="ev-check-$(date +%s)"
+backend=k8sgpt-detection-pack:ev
+lane=k8sgpt-detection-pack.io/component=ev
+selector=$lane,k8sgpt-detection-pack.io/category=pod_lifecycle,k8sgpt-detection-pack.io/signal_type=image_pull_failure
+
+cleanup() {
+  kubectl -n "$TEST_NAMESPACE" delete pod "$pod" --ignore-not-found --wait=false || true
+  forget Pod "$TEST_NAMESPACE/$pod" "$backend" "$lane" || true
+}
+trap cleanup EXIT
+
+echo "creating Pod $TEST_NAMESPACE/$pod with an image that cannot be pulled"
+kubectl -n "$TEST_NAMESPACE" create -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $pod
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      # .invalid never resolves, so every pull fails.
+      image: registry.invalid/watcher-check:none
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+EOF
+await Pod "$TEST_NAMESPACE/$pod" "$backend" "$selector"
+{{- end -}}

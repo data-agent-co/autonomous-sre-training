@@ -1,0 +1,3085 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Fault detection and handling for the demo cluster. One panel per sample app + cluster-level health stats + K8sGPT activity signals.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 10,
+      "title": "Topology & services",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 7
+      },
+      "options": {
+        "mode": "markdown",
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "### Sample apps \u2014 `demo-apps` namespace (instrumented with golden signals)\n\n| App | Stack | Limit | /metrics | Role | Fault trigger |\n|---|---|---|---|---|---|\n| \ud83d\udd34 `payments-api`   | Go     | 128Mi | \u2713 | **OOMKill victim**     | `./scripts/trigger-oomkill.sh` \u2192 allocates past the limit in the running container after every restart \u2192 CrashLoopBackOff |\n| \ud83d\udfe1 `recommend-svc`  | Python | 128Mi + 128Mi `leak-fixture` sidecar | \u2713 | **Slow-leak victim**   | `./scripts/trigger-slowleak.sh` \u2192 the sidecar's memory climbs 20 MB/min until it is OOMKilled (invisible to K8sGPT until then) |\n| \ud83d\udfe2 `catalog-svc`    | nginx  | 64Mi  | \u2014 | **Healthy control**    | none \u2014 no traffic, always green |\n| \u2699\ufe0f `loadgen`        | curl   | 32Mi  | \u2014 | **Traffic generator**  | runs continuously, ~2 req/sec each to payments-api and recommend-svc `/healthz` |\n\n### Detection layers\n\n- **Golden signals (L \u00b7 T \u00b7 E \u00b7 S)** \u2014 Throughput / Latency / Errors panels show signs of fault *regardless of root cause*. The Composite Health Score combines them into one 0-100 number \u2014 the always-on, root-cause-agnostic detector.\n- **K8sGPT** (`k8sgpt-system`) \u2014 scans the `demo-apps` Pods and writes a Result per finding (`kubectl get results -n k8sgpt-system`). With an LLM configured it adds an AI explanation; with a Slack webhook it posts each new Result. Specific, after-the-fact.\n- **watcher** (`k8sgpt-system`) \u2014 writes a Result when a ConfigMap labelled `k8sgpt-detection-pack.io/critical=true` is created, changed or deleted.\n\n### Observability \u2014 `monitoring` namespace\n\n- **kube-prometheus-stack** \u2014 Prometheus (6h retention) + Grafana + Alertmanager + kube-state-metrics + node-exporter. App `/metrics` scraped via per-app **ServiceMonitor**.\n- Dashboards auto-loaded via Grafana sidecar; source: `demo-cluster/grafana/demo-cluster-overview.json`."
+      },
+      "fieldConfig": {}
+    },
+    {
+      "id": 1,
+      "title": "Demo apps healthy",
+      "description": "Number of pods in demo-apps currently Ready",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(kube_pod_status_ready{namespace=\"demo-apps\", condition=\"true\"} == 1) or vector(0)",
+          "refId": "A",
+          "legendFormat": "ready"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 2,
+      "title": "CrashLoopBackOff",
+      "description": "Containers currently waiting in CrashLoopBackOff. Falls back to 0 when no pods match \u2014 keeps the panel showing a green '0' instead of 'No data' when everything is healthy.",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)",
+          "refId": "A",
+          "legendFormat": "pods"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 3,
+      "title": "OOMKills (last 5m)",
+      "description": "Restarts attributable to OOM (container had OOMKilled state \u00d7 number of restarts in window). The naive increase() on the OOMKilled gauge can't handle rapid CrashLoop cycles \u2014 this query is robust to that.",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(max_over_time(kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) * on(pod, container) group_left increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m])) or vector(0)",
+          "refId": "A",
+          "legendFormat": "kills"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Restarts (last 5m)",
+      "description": "Total container restarts in demo-apps within the last 5 minutes",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]))) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "restarts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1.5
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 11,
+      "title": "Restart rate per pod (1m window)",
+      "description": "rate(restarts/sec). Goes high during CrashLoopBackOff cycles, returns to 0 when stable. The cleanest live signal of an ongoing fault.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (rate(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "{{container}} @ {{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Container restart events / min",
+      "description": "increase(restart_total)[1m] per pod, rendered as bars. Each bar is a new container restart in that minute. In this demo the OOMKill victim restarts only when OOMed, so this also functions as an OOMKill rate panel \u2014 but it's robust to kube-state-metrics' sparse emission of the OOMKilled gauge during long backoff. Drops to 0 once the pod stabilizes.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "{{container}} @ {{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "stepBefore",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Container restarts over time",
+      "description": "Restart count per pod. Climbing here means CrashLoopBackOff \u2014 the signal K8sGPT's Pod analyzer flags.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 16,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "{{container}} @ {{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Active fault states (empty = healthy \u2713)",
+      "description": "Containers in demo-apps currently in a waiting state (CrashLoopBackOff / ImagePullBackOff / ErrImagePull / ContainerCreating). When the cluster is healthy this is just a green checkmark \u2014 that's the goal state. During a fault the table populates with one row per affected pod, color-coded by reason. These are exactly the events K8sGPT's Pod analyzer flags.",
+      "type": "table",
+      "gridPos": {
+        "x": 16,
+        "y": 30,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\"} == 1) or on() vector(0)",
+          "refId": "A",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "left",
+            "displayMode": "auto"
+          },
+          "noValue": "\u2713  All containers running"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Reason"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "CrashLoopBackOff": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "\ud83d\udd34 CrashLoopBackOff"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "ImagePullBackOff": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "\ud83d\udd34 ImagePullBackOff"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "ErrImagePull": {
+                        "color": "red",
+                        "index": 2,
+                        "text": "\ud83d\udd34 ErrImagePull"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "ContainerCreating": {
+                        "color": "yellow",
+                        "index": 3,
+                        "text": "\ud83d\udfe1 ContainerCreating"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "node": true,
+              "service": true,
+              "uid": true
+            },
+            "indexByName": {
+              "pod": 0,
+              "container": 1,
+              "reason": 2
+            },
+            "renameByName": {
+              "pod": "Pod",
+              "container": "Container",
+              "reason": "Reason"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Memory growth rate (per pod, 2m window)",
+      "description": "rate() of container_memory_working_set_bytes \u2014 the SLOPE of the memory line, in bytes/sec. The cleanest live signal of a slow leak: visible at any absolute memory level. Negative values during OOM cycles are kernel reclaim, not anomalies. Thresholds: yellow \u2265 100 KB/s (~6 MB/min), red \u2265 500 KB/s (~30 MB/min).",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(6, (deriv(sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"})[2m:15s]) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "{{container}} @ {{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100000
+              },
+              {
+                "color": "red",
+                "value": 500000
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Composite Health Score (0-100, lower = worse)",
+      "description": "Aggregate health score, 0-100 (higher = healthier). Read the score AND the hover on which term is firing.\n\nFormula (each term is subtracted independently, so multiple hits stack):\n  100 (baseline)\n  \u221250 \u00b7 CrashLoopBackOff on any demo-apps container\n  \u221220 \u00b7 memory working-set > 50% of limit (any container)\n  \u221230 \u00b7 memory working-set > 80% of limit (any container)\n  \u221230 \u00b7 payments-api HTTP 5xx rate > 1% (1m window)\n  \u221230 \u00b7 recommend-svc HTTP 5xx rate > 1% (1m window)\n  \u221250 \u00b7 any demo-apps pod not Ready (payments-api / recommend-svc / catalog-svc)\n\nColour bands:\n  \u2265 70 = green (healthy)\n  40\u201369 = yellow (degraded)\n  <  40 = red (critical)\n\nThe whole point of this panel: detect any of the demo's faults\nwithout knowing the root cause. When it turns red, drill down to the\nLTES row below to see which golden signal is affected.",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 - (((sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)) > bool 0) * 50) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.5) * 20) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.8) * 30) - (((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((min(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", condition=\"true\"}) or vector(1)) < bool 1) * 50)",
+          "refId": "A",
+          "legendFormat": "health",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Throughput \u2014 req/sec (T)",
+      "description": "Golden signal T: rate of HTTP requests per second, per service. Generated by the loadgen pod. Drops to 0 while the service's scrape target is down.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(payments_api_http_requests_total[1m])) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "payments-api"
+        },
+        {
+          "expr": "(sum(rate(recommend_svc_http_requests_total[1m])) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+          "refId": "B",
+          "legendFormat": "recommend-svc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Latency p95 \u2014 ms (L)",
+      "description": "Golden signal L: 95th percentile request latency, per service. Spikes during load saturation and during fault recovery cycles. Drops to 0 while the service's scrape target is down.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 6,
+        "y": 15,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "((histogram_quantile(0.95, sum by (le) (rate(payments_api_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "payments-api"
+        },
+        {
+          "expr": "((histogram_quantile(0.95, sum by (le) (rate(recommend_svc_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+          "refId": "B",
+          "legendFormat": "recommend-svc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          },
+          "unit": "ms",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Service errors \u2014 % (E)",
+      "description": "Golden signal E. Combines two failure modes: (a) HTTP 5xx responses emitted by the app itself, and (b) Prometheus scrape unavailability (`up == 0`) \u2014 the only signal that catches OOMKill / CrashLoop / pod-down faults where the server never gets a chance to emit a 5xx because the connection is refused. catalog-svc uses kube_pod_status_ready since it has no /metrics endpoint. 100% means target was unreachable for the entire window.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"payments-api\"}[1m])) or vector(1))) * 100",
+          "refId": "A",
+          "legendFormat": "payments-api"
+        },
+        {
+          "expr": "((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"recommend-svc\"}[1m])) or vector(1))) * 100",
+          "refId": "B",
+          "legendFormat": "recommend-svc"
+        },
+        {
+          "expr": "(1 - (avg(avg_over_time(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", condition=\"true\"}[1m])) or vector(1))) * 100",
+          "refId": "C",
+          "legendFormat": "catalog-svc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Saturation \u2014 memory % of limit (S)",
+      "description": "Golden signal S: each container's memory working set as % of its memory limit (top 6, running pods only). Memory only: it is the resource every demo fault exhausts. A container OOMKilled in the last minute shows as 100%: memory is sampled about every 15 s, so the sample at the moment of the kill is usually missed. The red dashed line is the 100% limit; it is always drawn, so the y-axis always reaches 100%.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 18,
+        "y": 15,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(6, (max by (namespace, pod, container) (  container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", container!=\"\", container!=\"POD\"}   / on(namespace, pod, container) group_left   kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"}   * 100  or 100 * (kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", reason=\"OOMKilled\"} == 1)   and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m]) > 0)) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1)))",
+          "refId": "A",
+          "legendFormat": "{{container}} @ {{pod}}"
+        },
+        {
+          "expr": "vector(100)",
+          "refId": "B",
+          "legendFormat": "limit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "spanNulls": false,
+            "gradientMode": "opacity",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "limit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "K8sGPT detection events (per minute)",
+      "description": "Each bar marks WHEN K8sGPT created a new Result (and, with Slack on, posted it) \u2014 bar height = number of new Result CRDs that landed in that 1-minute window. Flat-zero baseline means no recent detections; vertical spikes are the exact moments the agent fired. More telling than a cumulative count: when you trigger OOMKill at T+10s and a bar appears at ~T+30s, you see the agent reacting in real time. Sourced from delta(k8sgpt_number_of_results[1m]), clamped to 0 to suppress the dips when Result CRDs are garbage-collected.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 34,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "clamp_min(sum by (object_namespace) (delta(k8sgpt_number_of_results[1m])), 0) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "{{object_namespace}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.7
+          },
+          "unit": "short",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "sum",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "K8sGPT diagnoses by Kind",
+      "description": "Currently-active K8sGPT Result CRDs grouped by the Kubernetes Kind that triggered them (Pod, Service, Deployment, etc.). When the cluster is healthy this is empty. During a fault each row is one K8sGPT finding (with an AI explanation when an LLM is configured). Refreshes from k8sgpt_number_of_results_by_type emitted by the operator.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(k8sgpt_number_of_results_by_type or label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"}, \"kind\", \"Slack sink\", \"webhook\", \".*\"), \"name\", \"incidents-demo (webhook)\", \"webhook\", \".*\"), \"object_namespace\", \"\u2014\", \"webhook\", \".*\")) or on() vector(0)",
+          "refId": "A",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "left",
+            "displayMode": "auto"
+          },
+          "noValue": "\u2713  No active diagnoses"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Resource"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count / status"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "\u2717 unreachable",
+                        "color": "red",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "\u2014",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "object_namespace": false,
+              "pod": true,
+              "service": true,
+              "k8sgpt": true,
+              "webhook": true
+            },
+            "indexByName": {
+              "kind": 0,
+              "name": 1,
+              "object_namespace": 2,
+              "Value": 3
+            },
+            "renameByName": {
+              "object_namespace": "Namespace"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "LLM calls \u2014 errors + latency",
+      "description": "Two correlated signals for the K8sGPT \u2192 LLM path, on a shared time axis:\n\u2022 Errors (left Y-axis, ops/sec) \u2014 failed LLM calls and reconcile errors averaged over 5m. Spikes during rate-limiting, auth failures, or network issues to the provider.\n\u2022 Avg latency (right Y-axis, seconds) \u2014 mean reconcile duration from controller_runtime_reconcile_time_seconds. The LLM round-trip dominates this, so it's effectively the LLM call latency. Healthy is a few seconds or less on a small hosted model; climbing latency without errors usually means the model is throttled but still serving.\nWatching both together reveals the failure mode: errors spike + latency steady = hard rejection (429/auth); latency climbs first then errors = the LLM is dying slowly.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 46,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or on() vector(0)",
+          "refId": "A",
+          "legendFormat": "failed / sec ({{backend}})"
+        },
+        {
+          "expr": "(rate(k8sgpt_reconcile_error_count[5m])) or on() vector(0)",
+          "refId": "B",
+          "legendFormat": "reconcile errors / sec"
+        },
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+          "refId": "C",
+          "legendFormat": "avg latency"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/leak-fixture$|^leak-fixture( @|$)|leak-fixture$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "magenta"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/recommend-svc$|^recommend-svc( @|$)|^recommend-svc-|/recommend-svc$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/payments-api$|^payments-api( @|$)|^payments-api-|/payments-api$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/nginx$|^nginx( @|$)|nginx$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/catalog-svc|^catalog-svc( @|$)|^catalog-svc-"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/loadgen$|^loadgen( @|$)|^loadgen-|/loadgen$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "latency (s)"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "K8sGPT agent \u2014 health + golden signals (LTES)",
+      "description": "Composite 0-100 health score plus the four golden signals for the K8sGPT operator itself:\n\u2022 Health \u2014 100 minus 30 per active error mode (failed AI calls / reconcile errors above 0.1/s, sustained 5m).\n\u2022 Throughput \u2014 reconciles/sec for the k8sgpt controller (controller_runtime_reconcile_total). Drops to 0 if the controller is stuck.\n\u2022 Latency \u2014 average reconcile duration (controller_runtime_reconcile_time_seconds). Long reconciles mean the LLM round-trip is slow.\n\u2022 Errors \u2014 combined rate of failed LLM calls + reconcile errors per second. Spikes during rate-limiting or auth failures.\n\u2022 Saturation \u2014 active_workers / max_concurrent_reconciles, as a percentage. Pegs at 100% when the controller's worker pool is fully busy. With K8sGPT's default max=1, you see this hold at 100% while an LLM call is in flight \u2014 slow LLM = sustained saturation.\nThis is the agent's own watchdog \u2014 does the agent work, not whether the cluster is healthy.",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 46,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(clamp_min(100 - 30 * ((rate(k8sgpt_number_of_failed_backend_ai_calls[5m]) > bool 0.1) or vector(0)) - 30 * ((rate(k8sgpt_reconcile_error_count[5m]) > bool 0.1) or vector(0)), 0))",
+          "refId": "A",
+          "legendFormat": "Health",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_total{controller=\"k8sgpt\"}[5m]))) or on() vector(0)",
+          "refId": "B",
+          "legendFormat": "Reconciles/s",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+          "refId": "C",
+          "legendFormat": "Avg latency",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "(sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) + sum(rate(k8sgpt_reconcile_error_count[5m]))) or on() vector(0)",
+          "refId": "D",
+          "legendFormat": "Errors/s",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "((sum(controller_runtime_active_workers{controller=\"k8sgpt\"}) / clamp_min(sum(controller_runtime_max_concurrent_reconciles{controller=\"k8sgpt\"}), 1)) * 100) or on() vector(0)",
+          "refId": "E",
+          "legendFormat": "Saturation",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Health"
+              },
+              {
+                "id": "description",
+                "value": "Composite 0-100 score for the K8sGPT agent. 100 = no errors. Subtracts 30 per active error mode (failed AI calls / reconcile errors) when either exceeds 0.1/s averaged over 5 minutes. The agent's own watchdog \u2014 separate from the cluster's health."
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 50
+                    },
+                    {
+                      "color": "green",
+                      "value": 80
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reconciles/s"
+              },
+              {
+                "id": "description",
+                "value": "Throughput. A 'reconcile' is one iteration of the K8sGPT controller's main work loop \u2014 it wakes up when a watched resource changes (or on a periodic tick), scans the cluster, calls the LLM (when configured), writes Result CRDs, and posts to Slack (when configured). This is the rate of those iterations per second. K8sGPT's controller-runtime default re-sync is ~10 minutes, so 0 in a 5-minute window during idle is normal (shown as blue, not red). Only worry if it's still 0 during an active fault. Source: controller_runtime_reconcile_total{controller=\"k8sgpt\"}."
+              },
+              {
+                "id": "unit",
+                "value": "ops"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.001
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Avg latency"
+              },
+              {
+                "id": "description",
+                "value": "Latency. Average duration of a single reconcile, in seconds. Mostly dominated by the LLM round-trip \u2014 slow LLM = climbing latency here. Healthy is a few seconds or less on a small hosted model; far longer usually means the provider is rate-limiting or the model is overloaded. 0 during idle just means no recent reconciles to measure (shown as blue, not green \u2014 green would imply 'fast', but there's nothing to be fast at). Source: controller_runtime_reconcile_time_seconds_sum / count."
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.001
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "D"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Errors/s"
+              },
+              {
+                "id": "description",
+                "value": "Errors. Combined rate of two failure types per second: failed LLM calls (k8sgpt_number_of_failed_backend_ai_calls \u2014 rate limits, auth issues, network drops) AND controller reconcile errors (k8sgpt_reconcile_error_count \u2014 anything the controller couldn't process). Both feed the Health composite. Spikes during quota burn."
+              },
+              {
+                "id": "unit",
+                "value": "ops"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.05
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.2
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "E"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Saturation"
+              },
+              {
+                "id": "description",
+                "value": "Saturation. Percentage of the controller's worker pool currently busy: active_workers / max_concurrent_reconciles \u00d7 100. K8sGPT defaults to max=1 worker, so this is 0% idle or 100% busy. Holds at 100% while an LLM call is in flight \u2014 sustained 100% means slow LLM is bottlenecking throughput even if errors are low."
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 70
+                    },
+                    {
+                      "color": "red",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "demo-cluster",
+    "k8sgpt",
+    "fault-detection"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-2m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Demo Cluster \u2014 Fault Detection & Handling",
+  "uid": "demo-cluster-overview",
+  "version": 1,
+  "weekStart": ""
+}

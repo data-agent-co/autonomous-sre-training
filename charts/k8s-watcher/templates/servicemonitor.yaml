@@ -1,0 +1,42 @@
+{{- /*
+One scrape endpoint per enabled lane. The Prometheus Operator would name
+both targets' job after the Service; the relabeling gives each lane its own
+job (serviceMonitor.jobNames), so up{job=...} tells the lanes apart.
+*/ -}}
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "k8s-watcher.selectorLabels" . | nindent 6 }}
+  endpoints:
+    {{- if .Values.ev.enabled }}
+    - port: ev-http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: {{ .Values.serviceMonitor.jobNames.ev }}
+    {{- end }}
+    {{- if .Values.cm.enabled }}
+    - port: cm-http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: {{ .Values.serviceMonitor.jobNames.cm }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,37 @@
+# Check out text files with LF line endings on every OS. Bash under WSL,
+# gofmt and go mod tidy all fail on CRLF files from a Windows clone.
+* text=auto eol=lf
+
+*.sh            text eol=lf
+*.go            text eol=lf
+go.mod          text eol=lf
+go.sum          text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.md            text eol=lf
+*.json          text eol=lf
+*.tpl           text eol=lf
+*.py            text eol=lf
+Makefile        text eol=lf
+Dockerfile      text eol=lf
+.env.example    text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+.dockerignore   text eol=lf
+LICENSE*        text eol=lf
+NOTICE          text eol=lf
+
+# Never convert or diff these.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.docx  binary
+*.pptx  binary
+*.xlsx  binary
+*.doc   binary
+*.ppt   binary
+*.xls   binary

@@ -1,0 +1,9 @@
+{{- if not (or .Values.ev.enabled .Values.cm.enabled) }}
+{{- fail "k8s-watcher: ev.enabled and cm.enabled are both false; the watcher would have nothing to run" }}
+{{- end }}
+{{- if eq (int .Values.ev.port) (int .Values.cm.port) }}
+{{- fail "k8s-watcher: ev.port and cm.port must differ (each lane serves its own /healthz, /readyz and /metrics)" }}
+{{- end }}
+{{- if gt (int (.Values.replicaCount | default 1)) 1 }}
+{{- fail "k8s-watcher: replicaCount must be 1; a second replica would write every Result twice" }}
+{{- end }}

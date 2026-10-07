@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: recommend-svc
+  namespace: demo-apps
+  labels:
+    release: prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [demo-apps]
+  selector:
+    matchLabels:
+      app: recommend-svc
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s

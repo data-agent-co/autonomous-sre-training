@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+spec:
+  # One writer: a second pod, from scale-out or a rolling update, would
+  # write every Result twice. Recreate stops the old pod before the new one
+  # starts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "k8s-watcher.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "k8s-watcher.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "k8s-watcher.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: watcher
+          image: {{ include "k8s-watcher.imageRef" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: EV_ENABLED
+              value: {{ .Values.ev.enabled | quote }}
+            - name: CM_ENABLED
+              value: {{ .Values.cm.enabled | quote }}
+            - name: RESULT_NAMESPACE
+              value: {{ .Values.resultNamespace | quote }}
+            - name: DRY_RUN
+              value: {{ .Values.dryRun | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: EV_HEALTH_ADDR
+              value: {{ printf ":%v" .Values.ev.port | quote }}
+            - name: CM_HEALTH_ADDR
+              value: {{ printf ":%v" .Values.cm.port | quote }}
+            - name: EV_DEDUP_WINDOW
+              value: {{ .Values.ev.dedupWindow | quote }}
+            - name: EV_SWEEP_INTERVAL
+              value: {{ .Values.ev.sweepInterval | quote }}
+            - name: PROBE_ENRICHMENT_ENABLED
+              value: {{ .Values.ev.probeEnrichment.enabled | quote }}
+            {{- with .Values.ev.probeEnrichment.prometheusUrl }}
+            - name: PROMETHEUS_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            {{- if .Values.ev.enabled }}
+            - name: ev-http
+              containerPort: {{ .Values.ev.port }}
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.cm.enabled }}
+            - name: cm-http
+              containerPort: {{ .Values.cm.port }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ include "k8s-watcher.probePort" . }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # /readyz answers 503 until the lane's informers have finished
+          # their first list, so the pod is Ready (and `helm upgrade --wait`
+          # returns) only once the lane sees new changes.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ include "k8s-watcher.probePort" . }}
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

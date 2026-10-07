@@ -1,0 +1,510 @@
+{
+  "comment": "Recorded from the previous Client (controller-runtime typed client with the k8sgpt-operator v0.2.27 Result type), lane cm. server: the Result already stored before the steps. results: each input Result as DryRun printed it (json.MarshalIndent). steps: the inputs emitted in order; for each, the error Emit returned and the API requests it sent. Request bodies have the first-observed-at and last-observed-at annotations set at emit time replaced by <now>.",
+  "server": {
+    "apiVersion": "core.k8sgpt.ai/v1alpha1",
+    "kind": "Result",
+    "metadata": {
+      "name": "preexisting",
+      "namespace": "k8sgpt-system",
+      "uid": "uid-pre",
+      "resourceVersion": "41",
+      "generation": 3,
+      "creationTimestamp": "2026-09-01T00:00:00Z",
+      "labels": {
+        "k8sgpt-detection-pack.io/component": "old",
+        "example.com/team": "kept-or-not"
+      },
+      "annotations": {
+        "k8sgpt-detection-pack.io/first-observed-at": "2026-09-01T00:00:00Z",
+        "k8sgpt-detection-pack.io/last-observed-at": "2026-09-02T00:00:00Z",
+        "k8sgpt-detection-pack.io/observation-count": "7",
+        "example.com/note": "kept"
+      },
+      "finalizers": [
+        "example.com/hold"
+      ],
+      "managedFields": [
+        {
+          "manager": "watcher",
+          "operation": "Update",
+          "apiVersion": "core.k8sgpt.ai/v1alpha1",
+          "time": "2026-09-02T00:00:00Z",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:spec": {}
+          }
+        }
+      ]
+    },
+    "spec": {
+      "backend": "old-backend",
+      "autoRemediationStatus": {
+        "phase": 1
+      },
+      "kind": "Pod",
+      "name": "default/old",
+      "error": [
+        {
+          "text": "old"
+        }
+      ],
+      "details": "{\"old\":true}",
+      "parentObject": "old-parent",
+      "future": "dropped-or-not"
+    },
+    "status": {
+      "lifecycle": "historical",
+      "webhook": "hook",
+      "contentHash": "abc",
+      "extra": "dropped-or-not"
+    }
+  },
+  "results": [
+    {
+      "name": "base",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"cm-configmap-app-config-506e96af\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"warning\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"entries\\\":[{\\\"key\\\":\\\"db\\\",\\\"change\\\":\\\"changed\\\",\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\",\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"new_len\\\":5}],\\\"added_count\\\":0,\\\"removed_count\\\":0,\\\"changed_count\\\":1},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"1234\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "base-again",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"cm-configmap-app-config-506e96af\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"warning\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"entries\\\":[{\\\"key\\\":\\\"db\\\",\\\"change\\\":\\\"changed\\\",\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\",\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"new_len\\\":5}],\\\"added_count\\\":0,\\\"removed_count\\\":0,\\\"changed_count\\\":1},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"1234\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v2",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"cm-configmap-app-config-506e96af\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"entries\\\":[{\\\"key\\\":\\\"db\\\",\\\"change\\\":\\\"changed\\\",\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\",\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"new_len\\\":5}],\\\"added_count\\\":0,\\\"removed_count\\\":0,\\\"changed_count\\\":1},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"1234\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v3-volatile-details",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"cm-configmap-app-config-506e96af\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"added_count\\\":0,\\\"changed_count\\\":1,\\\"entries\\\":[{\\\"change\\\":\\\"changed\\\",\\\"key\\\":\\\"db\\\",\\\"new_len\\\":5,\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\"}],\\\"removed_count\\\":0},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-10-02T00:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"999\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v4-stable-details",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"cm-configmap-app-config-506e96af\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"added_count\\\":0,\\\"changed_count\\\":1,\\\"entries\\\":[{\\\"change\\\":\\\"changed\\\",\\\"key\\\":\\\"db\\\",\\\"new_len\\\":5,\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\"}],\\\"removed_count\\\":0},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-10-02T00:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"999\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"stable\\\":\\\"changed\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "all-fields",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"all-fields\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/component\": \"test\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    },\n    \"annotations\": {\n      \"example.com/note\": \"kept\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:test\",\n    \"autoRemediationStatus\": {\n      \"phase\": 2\n    },\n    \"kind\": \"Deployment\",\n    \"name\": \"default/web\",\n    \"error\": [\n      {\n        \"text\": \"first\"\n      },\n      {\n        \"text\": \"second\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"a\",\n            \"masked\": \"b\"\n          },\n          {\n            \"masked\": \"only-masked\"\n          }\n        ]\n      },\n      {}\n    ],\n    \"details\": \"{\\\"k\\\":\\\"v\\\"}\",\n    \"parentObject\": \"Deployment/default/web\"\n  },\n  \"status\": {\n    \"lifecycle\": \"new\",\n    \"webhook\": \"hook\",\n    \"contentHash\": \"hash\"\n  }\n}"
+    },
+    {
+      "name": "empty-spec",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"empty-spec\",\n    \"namespace\": \"k8sgpt-system\"\n  },\n  \"spec\": {\n    \"backend\": \"\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"\",\n    \"name\": \"\",\n    \"error\": null,\n    \"details\": \"\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "preexisting",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"preexisting\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"warning\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"entries\\\":[{\\\"key\\\":\\\"db\\\",\\\"change\\\":\\\"changed\\\",\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\",\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"new_len\\\":5}],\\\"added_count\\\":0,\\\"removed_count\\\":0,\\\"changed_count\\\":1},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"1234\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "fail-get",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"fail-get-x\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"configuration_fault\",\n      \"k8sgpt-detection-pack.io/component\": \"cm\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"config_drift\",\n      \"k8sgpt-detection-pack.io/severity\": \"warning\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"cm_mutation\",\n      \"k8sgpt-detection-pack.io/source\": \"configmap\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:cm\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"ConfigMap\",\n    \"name\": \"payments/app-config\",\n    \"error\": [\n      {\n        \"text\": \"ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"configuration_fault\\\",\\\"diff\\\":{\\\"entries\\\":[{\\\"key\\\":\\\"db\\\",\\\"change\\\":\\\"changed\\\",\\\"old_value\\\":\\\"3:aaaaaaaaaaaaaaaa\\\",\\\"new_value\\\":\\\"5:cccccccccccccccc\\\",\\\"old_len\\\":3,\\\"new_len\\\":5}],\\\"added_count\\\":0,\\\"removed_count\\\":0,\\\"changed_count\\\":1},\\\"kind\\\":\\\"ConfigMap\\\",\\\"name\\\":\\\"app-config\\\",\\\"namespace\\\":\\\"payments\\\",\\\"observedAt\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"op\\\":\\\"Update\\\",\\\"redacted\\\":false,\\\"resourceVersion\\\":\\\"1234\\\",\\\"severity\\\":\\\"warning\\\",\\\"signal_type\\\":\\\"cm_mutation\\\",\\\"uid\\\":\\\"uid-cm-abc\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    }
+  ],
+  "steps": [
+    {
+      "emit": "base",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "configuration_fault",
+                "k8sgpt-detection-pack.io/component": "cm",
+                "k8sgpt-detection-pack.io/fault_class": "config_drift",
+                "k8sgpt-detection-pack.io/severity": "warning",
+                "k8sgpt-detection-pack.io/signal_type": "cm_mutation",
+                "k8sgpt-detection-pack.io/source": "configmap"
+              },
+              "name": "cm-configmap-app-config-506e96af",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:cm",
+              "details": "{\"category\":\"configuration_fault\",\"diff\":{\"entries\":[{\"key\":\"db\",\"change\":\"changed\",\"old_value\":\"3:aaaaaaaaaaaaaaaa\",\"new_value\":\"5:cccccccccccccccc\",\"old_len\":3,\"new_len\":5}],\"added_count\":0,\"removed_count\":0,\"changed_count\":1},\"kind\":\"ConfigMap\",\"name\":\"app-config\",\"namespace\":\"payments\",\"observedAt\":\"2026-05-21T10:00:00Z\",\"op\":\"Update\",\"redacted\":false,\"resourceVersion\":\"1234\",\"severity\":\"warning\",\"signal_type\":\"cm_mutation\",\"uid\":\"uid-cm-abc\"}",
+              "error": [
+                {
+                  "text": "ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed"
+                }
+              ],
+              "kind": "ConfigMap",
+              "name": "payments/app-config",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "base-again",
+      "err": "emitter: no change in result spec",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    },
+    {
+      "emit": "v2",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "2"
+              },
+              "creationTimestamp": "2026-10-01T00:00:00Z",
+              "generation": 1,
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "configuration_fault",
+                "k8sgpt-detection-pack.io/component": "cm",
+                "k8sgpt-detection-pack.io/fault_class": "config_drift",
+                "k8sgpt-detection-pack.io/severity": "critical",
+                "k8sgpt-detection-pack.io/signal_type": "cm_mutation",
+                "k8sgpt-detection-pack.io/source": "configmap"
+              },
+              "name": "cm-configmap-app-config-506e96af",
+              "namespace": "k8sgpt-system",
+              "resourceVersion": "1",
+              "uid": "uid-cm-configmap-app-config-506e96af"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:cm",
+              "details": "{\"category\":\"configuration_fault\",\"diff\":{\"entries\":[{\"key\":\"db\",\"change\":\"changed\",\"old_value\":\"3:aaaaaaaaaaaaaaaa\",\"new_value\":\"5:cccccccccccccccc\",\"old_len\":3,\"new_len\":5}],\"added_count\":0,\"removed_count\":0,\"changed_count\":1},\"kind\":\"ConfigMap\",\"name\":\"app-config\",\"namespace\":\"payments\",\"observedAt\":\"2026-05-21T10:00:00Z\",\"op\":\"Update\",\"redacted\":false,\"resourceVersion\":\"1234\",\"severity\":\"warning\",\"signal_type\":\"cm_mutation\",\"uid\":\"uid-cm-abc\"}",
+              "error": [
+                {
+                  "text": "ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed"
+                },
+                {
+                  "sensitive": [
+                    {
+                      "masked": "xxxxxx",
+                      "unmasked": "secret-pod"
+                    }
+                  ],
+                  "text": "second failure"
+                }
+              ],
+              "kind": "ConfigMap",
+              "name": "payments/app-config",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "v3-volatile-details",
+      "err": "emitter: no change in result spec",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    },
+    {
+      "emit": "v4-stable-details",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/cm-configmap-app-config-506e96af",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "3"
+              },
+              "creationTimestamp": "2026-10-01T00:00:00Z",
+              "generation": 1,
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "configuration_fault",
+                "k8sgpt-detection-pack.io/component": "cm",
+                "k8sgpt-detection-pack.io/fault_class": "config_drift",
+                "k8sgpt-detection-pack.io/severity": "critical",
+                "k8sgpt-detection-pack.io/signal_type": "cm_mutation",
+                "k8sgpt-detection-pack.io/source": "configmap"
+              },
+              "name": "cm-configmap-app-config-506e96af",
+              "namespace": "k8sgpt-system",
+              "resourceVersion": "2",
+              "uid": "uid-cm-configmap-app-config-506e96af"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:cm",
+              "details": "{\"category\":\"configuration_fault\",\"diff\":{\"added_count\":0,\"changed_count\":1,\"entries\":[{\"change\":\"changed\",\"key\":\"db\",\"new_len\":5,\"new_value\":\"5:cccccccccccccccc\",\"old_len\":3,\"old_value\":\"3:aaaaaaaaaaaaaaaa\"}],\"removed_count\":0},\"kind\":\"ConfigMap\",\"name\":\"app-config\",\"namespace\":\"payments\",\"observedAt\":\"2026-10-02T00:00:00Z\",\"op\":\"Update\",\"redacted\":false,\"resourceVersion\":\"999\",\"severity\":\"warning\",\"signal_type\":\"cm_mutation\",\"stable\":\"changed\",\"uid\":\"uid-cm-abc\"}",
+              "error": [
+                {
+                  "text": "ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed"
+                },
+                {
+                  "sensitive": [
+                    {
+                      "masked": "xxxxxx",
+                      "unmasked": "secret-pod"
+                    }
+                  ],
+                  "text": "second failure"
+                }
+              ],
+              "kind": "ConfigMap",
+              "name": "payments/app-config",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "all-fields",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/all-fields",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "example.com/note": "kept",
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "labels": {
+                "k8sgpt-detection-pack.io/component": "test",
+                "k8sgpt-detection-pack.io/signal_type": "oom_kill"
+              },
+              "name": "all-fields",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {
+                "phase": 2
+              },
+              "backend": "k8sgpt-detection-pack:test",
+              "details": "{\"k\":\"v\"}",
+              "error": [
+                {
+                  "text": "first"
+                },
+                {
+                  "sensitive": [
+                    {
+                      "masked": "b",
+                      "unmasked": "a"
+                    },
+                    {
+                      "masked": "only-masked"
+                    }
+                  ],
+                  "text": "second"
+                },
+                {}
+              ],
+              "kind": "Deployment",
+              "name": "default/web",
+              "parentObject": "Deployment/default/web"
+            },
+            "status": {
+              "contentHash": "hash",
+              "lifecycle": "new",
+              "webhook": "hook"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "emit": "empty-spec",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/empty-spec",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "name": "empty-spec",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "",
+              "details": "",
+              "error": null,
+              "kind": "",
+              "name": "",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "preexisting",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/preexisting",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/preexisting",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "example.com/note": "kept",
+                "k8sgpt-detection-pack.io/first-observed-at": "2026-09-01T00:00:00Z",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "8"
+              },
+              "creationTimestamp": "2026-09-01T00:00:00Z",
+              "finalizers": [
+                "example.com/hold"
+              ],
+              "generation": 3,
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "configuration_fault",
+                "k8sgpt-detection-pack.io/component": "cm",
+                "k8sgpt-detection-pack.io/fault_class": "config_drift",
+                "k8sgpt-detection-pack.io/severity": "warning",
+                "k8sgpt-detection-pack.io/signal_type": "cm_mutation",
+                "k8sgpt-detection-pack.io/source": "configmap"
+              },
+              "managedFields": [
+                {
+                  "apiVersion": "core.k8sgpt.ai/v1alpha1",
+                  "fieldsType": "FieldsV1",
+                  "fieldsV1": {
+                    "f:spec": {}
+                  },
+                  "manager": "watcher",
+                  "operation": "Update",
+                  "time": "2026-09-02T00:00:00Z"
+                }
+              ],
+              "name": "preexisting",
+              "namespace": "k8sgpt-system",
+              "resourceVersion": "41",
+              "uid": "uid-pre"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:cm",
+              "details": "{\"category\":\"configuration_fault\",\"diff\":{\"entries\":[{\"key\":\"db\",\"change\":\"changed\",\"old_value\":\"3:aaaaaaaaaaaaaaaa\",\"new_value\":\"5:cccccccccccccccc\",\"old_len\":3,\"new_len\":5}],\"added_count\":0,\"removed_count\":0,\"changed_count\":1},\"kind\":\"ConfigMap\",\"name\":\"app-config\",\"namespace\":\"payments\",\"observedAt\":\"2026-05-21T10:00:00Z\",\"op\":\"Update\",\"redacted\":false,\"resourceVersion\":\"1234\",\"severity\":\"warning\",\"signal_type\":\"cm_mutation\",\"uid\":\"uid-cm-abc\"}",
+              "error": [
+                {
+                  "text": "ConfigMap payments/app-config modified: 0 added, 0 removed, 1 changed"
+                }
+              ],
+              "kind": "ConfigMap",
+              "name": "payments/app-config",
+              "parentObject": ""
+            },
+            "status": {
+              "contentHash": "abc",
+              "lifecycle": "historical",
+              "webhook": "hook"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "emit": "fail-get",
+      "err": "get result: boom",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/fail-get-x",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    }
+  ]
+}

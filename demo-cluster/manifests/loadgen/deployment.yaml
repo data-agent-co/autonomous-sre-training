@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: demo-apps
+  labels:
+    app: loadgen
+    role: load-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgen
+  template:
+    metadata:
+      labels:
+        app: loadgen
+    spec:
+      containers:
+        - name: loadgen
+          image: curlimages/curl:8.22.0
+          # Continuous low-rate traffic to payments-api and recommend-svc so
+          # their /metrics endpoints have signal. Two endpoints alternated
+          # per iteration → ~2 req/sec each at 0.5s sleep.
+          #
+          # IMPORTANT: hits /healthz only — never /allocate. The /allocate
+          # endpoint on payments-api leaks memory by design (it's the
+          # OOMKill victim mechanism), so loadgen calling it would slowly
+          # OOM the pod. /healthz is read-only and side-effect-free.
+          #
+          # catalog-svc deliberately receives no traffic so it stays the
+          # "no traffic = healthy control" baseline on the dashboard.
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set +e
+              while true; do
+                curl -sS -o /dev/null --max-time 2 http://payments-api.demo-apps/healthz
+                curl -sS -o /dev/null --max-time 2 http://recommend-svc.demo-apps/healthz
+                sleep 0.5
+              done
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "100m"
+              memory: "32Mi"

@@ -1,0 +1,19 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+node_modules/
+__pycache__/
+.env
+.env.local
+
+# Go build and test output (`make build` writes k8s-watcher/bin/watcher).
+bin/
+*.test
+*.out
+*.prof
+
+# Local Claude Code settings and state, and local working notes.
+.claude/
+.impl/

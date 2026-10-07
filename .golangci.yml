@@ -1,0 +1,51 @@
+# golangci-lint v2 configuration for the watcher module (k8s-watcher/).
+# Run with `make lint`; CI uses the same golangci-lint version (see
+# .github/workflows/ci.yml).
+version: "2"
+
+run:
+  # Paths below are relative to k8s-watcher/go.mod.
+  relative-path-mode: gomod
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errname
+    - errorlint
+    - gocheckcompilerdirectives
+    - gocritic
+    - loggercheck
+    - makezero
+    - misspell
+    - musttag
+    - nilnesserr
+    - nolintlint
+    - predeclared
+    - promlinter
+    - reassign
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+  exclusions:
+    rules:
+      # main exits non-zero after a lane fails; the deferred signal-context
+      # cancel has nothing left to release at that point.
+      - path: cmd/watcher/main\.go
+        linters: [gocritic]
+        text: exitAfterDefer
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  # Report every finding, not the first few per linter.
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,68 @@
+autonomous-sre-training: watcher
+
+Licensed under the Apache License, Version 2.0 (see LICENSE-APACHE).
+
+This module contains code copied from the Detection Pack, an add-on for
+K8sGPT.
+
+  Source commit:     8f8b3a790691af686b108127ed47408567899267
+  License:           Apache License 2.0 (see LICENSE-APACHE)
+
+Copied paths, and where they live here:
+
+  components/events-watcher/app                 -> internal/pack/ev/app
+  components/events-watcher/internal/{dedup,event,filter,mapper,probectx}
+                                                -> internal/pack/ev/{dedup,event,filter,mapper,probectx}
+  components/configmap-watcher/app              -> internal/pack/cm/app
+  components/configmap-watcher/internal/{diff,filter,mapper,mutation}
+                                                -> internal/pack/cm/{diff,filter,mapper,mutation}
+  components/{events,configmap}-watcher/internal/emitter
+                                                -> internal/pack/emitter (merged)
+  components/{events,configmap}-watcher/internal/metrics
+                                                -> internal/pack/metrics (merged)
+
+Each copied file starts with a header saying it was copied from the
+Detection Pack and modified. Files in these packages without that header
+were written for this module. The Detection Pack has no NOTICE file of its
+own to carry over.
+
+Modifications:
+
+  - Import paths rewritten to this module.
+  - Both app packages take their input from an Options.Source instead of
+    a built-in informer; the Pack informer packages were not copied. In
+    this module the Sources are internal/adapt over internal/informer.
+  - The configmap-watcher passive buffer and /mutations API (internal/api,
+    internal/buffer) were not copied, and the app no longer wires them.
+  - The Pack test/e2e suites were not copied (they drive the removed
+    informer, api and buffer packages).
+  - Each component's internal/ level was flattened, so its packages sit
+    directly under internal/pack/ev and internal/pack/cm.
+  - The two emitter packages were merged into one, and so were the two
+    metrics packages; each pipeline passes its own no-change check and
+    component name.
+  - Results are written with client-go's dynamic client instead of
+    controller-runtime's client, using the Result type below.
+  - Code this watcher does not use was removed (including the storm
+    summary, Secret support and the fault_class values the events-watcher
+    never assigns).
+  - Bugs were fixed: a data race in the events-watcher hypotheses, and the
+    configmap-watcher diff (BinaryData and value lengths) and no-change
+    check (a second edit of the same key).
+  - Probe enrichment runs on its own workers, and both pipelines serve
+    /readyz.
+  - A Result write that conflicts with another write is retried once, and
+    the configmap-watcher writes on one worker, so edits of one ConfigMap
+    are written in order.
+  - Comments and texts that referred to Pack parts not copied here were
+    rewritten, and test fixtures use neutral names.
+
+This module also contains code copied from the K8sGPT operator.
+
+  Source repository: github.com/k8sgpt-ai/k8sgpt-operator
+  Source version:    v0.2.27 (api/v1alpha1/result_types.go)
+  Copyright:         2023 K8sGPT Contributors
+  License:           Apache License 2.0 (see LICENSE-APACHE)
+
+It lives in internal/k8sgpt/v1alpha1: the Result type's fields and JSON
+tags, without the controller-runtime scheme registration.

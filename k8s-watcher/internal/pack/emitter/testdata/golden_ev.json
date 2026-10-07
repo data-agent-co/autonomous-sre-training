@@ -1,0 +1,456 @@
+{
+  "comment": "Recorded from the previous Client (controller-runtime typed client with the k8sgpt-operator v0.2.27 Result type), lane ev. server: the Result already stored before the steps. results: each input Result as DryRun printed it (json.MarshalIndent). steps: the inputs emitted in order; for each, the error Emit returned and the API requests it sent. Request bodies have the first-observed-at and last-observed-at annotations set at emit time replaced by <now>.",
+  "server": {
+    "apiVersion": "core.k8sgpt.ai/v1alpha1",
+    "kind": "Result",
+    "metadata": {
+      "name": "preexisting",
+      "namespace": "k8sgpt-system",
+      "uid": "uid-pre",
+      "resourceVersion": "41",
+      "generation": 3,
+      "creationTimestamp": "2026-09-01T00:00:00Z",
+      "labels": {
+        "k8sgpt-detection-pack.io/component": "old",
+        "example.com/team": "kept-or-not"
+      },
+      "annotations": {
+        "k8sgpt-detection-pack.io/first-observed-at": "2026-09-01T00:00:00Z",
+        "k8sgpt-detection-pack.io/last-observed-at": "2026-09-02T00:00:00Z",
+        "k8sgpt-detection-pack.io/observation-count": "7",
+        "example.com/note": "kept"
+      },
+      "finalizers": [
+        "example.com/hold"
+      ],
+      "managedFields": [
+        {
+          "manager": "watcher",
+          "operation": "Update",
+          "apiVersion": "core.k8sgpt.ai/v1alpha1",
+          "time": "2026-09-02T00:00:00Z",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:spec": {}
+          }
+        }
+      ]
+    },
+    "spec": {
+      "backend": "old-backend",
+      "autoRemediationStatus": {
+        "phase": 1
+      },
+      "kind": "Pod",
+      "name": "default/old",
+      "error": [
+        {
+          "text": "old"
+        }
+      ],
+      "details": "{\"old\":true}",
+      "parentObject": "old-parent",
+      "future": "dropped-or-not"
+    },
+    "status": {
+      "lifecycle": "historical",
+      "webhook": "hook",
+      "contentHash": "abc",
+      "extra": "dropped-or-not"
+    }
+  },
+  "results": [
+    {
+      "name": "base",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"ev-oomkilled-api-7d8c-c70092aa\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\",\\\"confidence\\\":0.85},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "base-again",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"ev-oomkilled-api-7d8c-c70092aa\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\",\\\"confidence\\\":0.85},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v2",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"ev-oomkilled-api-7d8c-c70092aa\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\",\\\"confidence\\\":0.85},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v3-volatile-details",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"ev-oomkilled-api-7d8c-c70092aa\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"confidence\\\":0.85,\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\"},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"observedAt\\\":\\\"2026-10-02T00:00:00Z\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"resourceVersion\\\":\\\"999\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "v4-stable-details",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"ev-oomkilled-api-7d8c-c70092aa\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      },\n      {\n        \"text\": \"second failure\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"secret-pod\",\n            \"masked\": \"xxxxxx\"\n          }\n        ]\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"confidence\\\":0.85,\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\"},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"observedAt\\\":\\\"2026-10-02T00:00:00Z\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"resourceVersion\\\":\\\"999\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"stable\\\":\\\"changed\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "all-fields",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"all-fields\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/component\": \"test\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    },\n    \"annotations\": {\n      \"example.com/note\": \"kept\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:test\",\n    \"autoRemediationStatus\": {\n      \"phase\": 2\n    },\n    \"kind\": \"Deployment\",\n    \"name\": \"default/web\",\n    \"error\": [\n      {\n        \"text\": \"first\"\n      },\n      {\n        \"text\": \"second\",\n        \"sensitive\": [\n          {\n            \"unmasked\": \"a\",\n            \"masked\": \"b\"\n          },\n          {\n            \"masked\": \"only-masked\"\n          }\n        ]\n      },\n      {}\n    ],\n    \"details\": \"{\\\"k\\\":\\\"v\\\"}\",\n    \"parentObject\": \"Deployment/default/web\"\n  },\n  \"status\": {\n    \"lifecycle\": \"new\",\n    \"webhook\": \"hook\",\n    \"contentHash\": \"hash\"\n  }\n}"
+    },
+    {
+      "name": "empty-spec",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"empty-spec\",\n    \"namespace\": \"k8sgpt-system\"\n  },\n  \"spec\": {\n    \"backend\": \"\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"\",\n    \"name\": \"\",\n    \"error\": null,\n    \"details\": \"\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "preexisting",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"preexisting\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\",\\\"confidence\\\":0.85},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    },
+    {
+      "name": "fail-get",
+      "dryRun": "{\n  \"metadata\": {\n    \"name\": \"fail-get-x\",\n    \"namespace\": \"k8sgpt-system\",\n    \"labels\": {\n      \"k8sgpt-detection-pack.io/category\": \"pod_lifecycle\",\n      \"k8sgpt-detection-pack.io/component\": \"ev\",\n      \"k8sgpt-detection-pack.io/episode_id\": \"d5eda5d41d25c03e\",\n      \"k8sgpt-detection-pack.io/fault_class\": \"resource_exhaustion\",\n      \"k8sgpt-detection-pack.io/severity\": \"critical\",\n      \"k8sgpt-detection-pack.io/signal_type\": \"oom_kill\"\n    }\n  },\n  \"spec\": {\n    \"backend\": \"k8sgpt-detection-pack:ev\",\n    \"autoRemediationStatus\": {},\n    \"kind\": \"Pod\",\n    \"name\": \"payments/api-7d8c\",\n    \"error\": [\n      {\n        \"text\": \"OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\\n\\nPossible causes (most → least likely):\\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\n  4. Another container in the same pod consumed the shared memory budget.\\n\\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit\"\n      }\n    ],\n    \"details\": \"{\\\"category\\\":\\\"pod_lifecycle\\\",\\\"confidence\\\":0.85,\\\"count\\\":3,\\\"episode_id\\\":\\\"d5eda5d41d25c03e\\\",\\\"fault_class\\\":\\\"resource_exhaustion\\\",\\\"firstSeen\\\":\\\"2026-05-21T10:00:00Z\\\",\\\"hypotheses\\\":[{\\\"cause\\\":\\\"limit_too_low\\\",\\\"detail\\\":\\\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\\\",\\\"confidence\\\":0.85},{\\\"cause\\\":\\\"memory_leak\\\",\\\"detail\\\":\\\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\\\"},{\\\"cause\\\":\\\"load_spike\\\",\\\"detail\\\":\\\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\\\"},{\\\"cause\\\":\\\"sidecar_contention\\\",\\\"detail\\\":\\\"Another container in the same pod consumed the shared memory budget.\\\"}],\\\"involvedKind\\\":\\\"Pod\\\",\\\"involvedName\\\":\\\"api-7d8c\\\",\\\"involvedNamespace\\\":\\\"payments\\\",\\\"involvedUID\\\":\\\"uid-abc-123\\\",\\\"lastSeen\\\":\\\"2026-05-21T10:02:00Z\\\",\\\"note\\\":\\\"Container worker exceeded memory limit\\\",\\\"reason\\\":\\\"OOMKilled\\\",\\\"reportingController\\\":\\\"kubelet\\\",\\\"severity\\\":\\\"critical\\\",\\\"signal_type\\\":\\\"oom_kill\\\",\\\"type\\\":\\\"Warning\\\"}\",\n    \"parentObject\": \"\"\n  },\n  \"status\": {}\n}"
+    }
+  ],
+  "steps": [
+    {
+      "emit": "base",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "pod_lifecycle",
+                "k8sgpt-detection-pack.io/component": "ev",
+                "k8sgpt-detection-pack.io/episode_id": "d5eda5d41d25c03e",
+                "k8sgpt-detection-pack.io/fault_class": "resource_exhaustion",
+                "k8sgpt-detection-pack.io/severity": "critical",
+                "k8sgpt-detection-pack.io/signal_type": "oom_kill"
+              },
+              "name": "ev-oomkilled-api-7d8c-c70092aa",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:ev",
+              "details": "{\"category\":\"pod_lifecycle\",\"confidence\":0.85,\"count\":3,\"episode_id\":\"d5eda5d41d25c03e\",\"fault_class\":\"resource_exhaustion\",\"firstSeen\":\"2026-05-21T10:00:00Z\",\"hypotheses\":[{\"cause\":\"limit_too_low\",\"detail\":\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\",\"confidence\":0.85},{\"cause\":\"memory_leak\",\"detail\":\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\"},{\"cause\":\"load_spike\",\"detail\":\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\"},{\"cause\":\"sidecar_contention\",\"detail\":\"Another container in the same pod consumed the shared memory budget.\"}],\"involvedKind\":\"Pod\",\"involvedName\":\"api-7d8c\",\"involvedNamespace\":\"payments\",\"involvedUID\":\"uid-abc-123\",\"lastSeen\":\"2026-05-21T10:02:00Z\",\"note\":\"Container worker exceeded memory limit\",\"reason\":\"OOMKilled\",\"reportingController\":\"kubelet\",\"severity\":\"critical\",\"signal_type\":\"oom_kill\",\"type\":\"Warning\"}",
+              "error": [
+                {
+                  "text": "OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\n\nPossible causes (most → least likely):\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\n  4. Another container in the same pod consumed the shared memory budget.\n\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit"
+                }
+              ],
+              "kind": "Pod",
+              "name": "payments/api-7d8c",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "base-again",
+      "err": "emitter: no change in result spec",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    },
+    {
+      "emit": "v2",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "2"
+              },
+              "creationTimestamp": "2026-10-01T00:00:00Z",
+              "generation": 1,
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "pod_lifecycle",
+                "k8sgpt-detection-pack.io/component": "ev",
+                "k8sgpt-detection-pack.io/episode_id": "d5eda5d41d25c03e",
+                "k8sgpt-detection-pack.io/fault_class": "resource_exhaustion",
+                "k8sgpt-detection-pack.io/severity": "critical",
+                "k8sgpt-detection-pack.io/signal_type": "oom_kill"
+              },
+              "name": "ev-oomkilled-api-7d8c-c70092aa",
+              "namespace": "k8sgpt-system",
+              "resourceVersion": "1",
+              "uid": "uid-ev-oomkilled-api-7d8c-c70092aa"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:ev",
+              "details": "{\"category\":\"pod_lifecycle\",\"confidence\":0.85,\"count\":3,\"episode_id\":\"d5eda5d41d25c03e\",\"fault_class\":\"resource_exhaustion\",\"firstSeen\":\"2026-05-21T10:00:00Z\",\"hypotheses\":[{\"cause\":\"limit_too_low\",\"detail\":\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\",\"confidence\":0.85},{\"cause\":\"memory_leak\",\"detail\":\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\"},{\"cause\":\"load_spike\",\"detail\":\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\"},{\"cause\":\"sidecar_contention\",\"detail\":\"Another container in the same pod consumed the shared memory budget.\"}],\"involvedKind\":\"Pod\",\"involvedName\":\"api-7d8c\",\"involvedNamespace\":\"payments\",\"involvedUID\":\"uid-abc-123\",\"lastSeen\":\"2026-05-21T10:02:00Z\",\"note\":\"Container worker exceeded memory limit\",\"reason\":\"OOMKilled\",\"reportingController\":\"kubelet\",\"severity\":\"critical\",\"signal_type\":\"oom_kill\",\"type\":\"Warning\"}",
+              "error": [
+                {
+                  "text": "OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\n\nPossible causes (most → least likely):\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\n  4. Another container in the same pod consumed the shared memory budget.\n\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit"
+                },
+                {
+                  "sensitive": [
+                    {
+                      "masked": "xxxxxx",
+                      "unmasked": "secret-pod"
+                    }
+                  ],
+                  "text": "second failure"
+                }
+              ],
+              "kind": "Pod",
+              "name": "payments/api-7d8c",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "v3-volatile-details",
+      "err": "emitter: no change in result spec",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    },
+    {
+      "emit": "v4-stable-details",
+      "err": "emitter: no change in result spec",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/ev-oomkilled-api-7d8c-c70092aa",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    },
+    {
+      "emit": "all-fields",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/all-fields",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "example.com/note": "kept",
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "labels": {
+                "k8sgpt-detection-pack.io/component": "test",
+                "k8sgpt-detection-pack.io/signal_type": "oom_kill"
+              },
+              "name": "all-fields",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {
+                "phase": 2
+              },
+              "backend": "k8sgpt-detection-pack:test",
+              "details": "{\"k\":\"v\"}",
+              "error": [
+                {
+                  "text": "first"
+                },
+                {
+                  "sensitive": [
+                    {
+                      "masked": "b",
+                      "unmasked": "a"
+                    },
+                    {
+                      "masked": "only-masked"
+                    }
+                  ],
+                  "text": "second"
+                },
+                {}
+              ],
+              "kind": "Deployment",
+              "name": "default/web",
+              "parentObject": "Deployment/default/web"
+            },
+            "status": {
+              "contentHash": "hash",
+              "lifecycle": "new",
+              "webhook": "hook"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "emit": "empty-spec",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/empty-spec",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "POST",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "k8sgpt-detection-pack.io/first-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "1"
+              },
+              "name": "empty-spec",
+              "namespace": "k8sgpt-system"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "",
+              "details": "",
+              "error": null,
+              "kind": "",
+              "name": "",
+              "parentObject": ""
+            },
+            "status": {}
+          }
+        }
+      ]
+    },
+    {
+      "emit": "preexisting",
+      "err": "",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/preexisting",
+          "query": "",
+          "contentType": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/preexisting",
+          "query": "",
+          "contentType": "application/json",
+          "body": {
+            "apiVersion": "core.k8sgpt.ai/v1alpha1",
+            "kind": "Result",
+            "metadata": {
+              "annotations": {
+                "example.com/note": "kept",
+                "k8sgpt-detection-pack.io/first-observed-at": "2026-09-01T00:00:00Z",
+                "k8sgpt-detection-pack.io/last-observed-at": "<now>",
+                "k8sgpt-detection-pack.io/observation-count": "8"
+              },
+              "creationTimestamp": "2026-09-01T00:00:00Z",
+              "finalizers": [
+                "example.com/hold"
+              ],
+              "generation": 3,
+              "labels": {
+                "k8sgpt-detection-pack.io/category": "pod_lifecycle",
+                "k8sgpt-detection-pack.io/component": "ev",
+                "k8sgpt-detection-pack.io/episode_id": "d5eda5d41d25c03e",
+                "k8sgpt-detection-pack.io/fault_class": "resource_exhaustion",
+                "k8sgpt-detection-pack.io/severity": "critical",
+                "k8sgpt-detection-pack.io/signal_type": "oom_kill"
+              },
+              "managedFields": [
+                {
+                  "apiVersion": "core.k8sgpt.ai/v1alpha1",
+                  "fieldsType": "FieldsV1",
+                  "fieldsV1": {
+                    "f:spec": {}
+                  },
+                  "manager": "watcher",
+                  "operation": "Update",
+                  "time": "2026-09-02T00:00:00Z"
+                }
+              ],
+              "name": "preexisting",
+              "namespace": "k8sgpt-system",
+              "resourceVersion": "41",
+              "uid": "uid-pre"
+            },
+            "spec": {
+              "autoRemediationStatus": {},
+              "backend": "k8sgpt-detection-pack:ev",
+              "details": "{\"category\":\"pod_lifecycle\",\"confidence\":0.85,\"count\":3,\"episode_id\":\"d5eda5d41d25c03e\",\"fault_class\":\"resource_exhaustion\",\"firstSeen\":\"2026-05-21T10:00:00Z\",\"hypotheses\":[{\"cause\":\"limit_too_low\",\"detail\":\"Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\",\"confidence\":0.85},{\"cause\":\"memory_leak\",\"detail\":\"Usage grows unbounded over time (heap or cache leak) until it hits the limit.\"},{\"cause\":\"load_spike\",\"detail\":\"A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\"},{\"cause\":\"sidecar_contention\",\"detail\":\"Another container in the same pod consumed the shared memory budget.\"}],\"involvedKind\":\"Pod\",\"involvedName\":\"api-7d8c\",\"involvedNamespace\":\"payments\",\"involvedUID\":\"uid-abc-123\",\"lastSeen\":\"2026-05-21T10:02:00Z\",\"note\":\"Container worker exceeded memory limit\",\"reason\":\"OOMKilled\",\"reportingController\":\"kubelet\",\"severity\":\"critical\",\"signal_type\":\"oom_kill\",\"type\":\"Warning\"}",
+              "error": [
+                {
+                  "text": "OOMKilled (oom_kill) on payments/api-7d8c: Container worker exceeded memory limit\n\nPossible causes (most → least likely):\n  1. Working set legitimately exceeds the memory limit — raise the limit/request to match real usage.\n  2. Usage grows unbounded over time (heap or cache leak) until it hits the limit.\n  3. A transient burst (large request, batch job, fan-in) briefly exceeded the limit.\n  4. Another container in the same pod consumed the shared memory budget.\n\nThis is a symptom signal — confirming the cause requires correlation (workload spec, recent config/RBAC changes, node conditions, dependency health). Raw event: Container worker exceeded memory limit"
+                }
+              ],
+              "kind": "Pod",
+              "name": "payments/api-7d8c",
+              "parentObject": ""
+            },
+            "status": {
+              "contentHash": "abc",
+              "lifecycle": "historical",
+              "webhook": "hook"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "emit": "fail-get",
+      "err": "get result: boom",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/apis/core.k8sgpt.ai/v1alpha1/namespaces/k8sgpt-system/results/fail-get-x",
+          "query": "",
+          "contentType": ""
+        }
+      ]
+    }
+  ]
+}

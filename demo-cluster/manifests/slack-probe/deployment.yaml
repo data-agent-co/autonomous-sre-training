@@ -1,0 +1,146 @@
+# Slack webhook health probe.
+#
+# Every 30s, POSTs an empty body to the configured Slack webhook URL and
+# exports a Prometheus gauge based on the response:
+#
+#   slack_webhook_up = 1  if response is 200 (accepted) or 400 ("invalid
+#                          payload" — webhook URL is valid + alive, body
+#                          rejected as empty). Both confirm reachability.
+#   slack_webhook_up = 0  on timeout, network error, or 404/403 etc.
+#
+# The empty body trick lets us probe reachability without spamming the
+# Slack channel — Slack rejects the request before posting.
+#
+# Why not blackbox-exporter: this is a single-webhook demo cluster.
+# Two manifests + a 30-line script beat 80 lines of helm values.
+#
+# scripts/up.sh applies this only when SLACK_WEBHOOK_URL is set.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slack-probe-script
+  namespace: k8sgpt-system
+data:
+  probe.py: |
+    import os, time, urllib.request, urllib.error
+    from prometheus_client import Gauge, start_http_server
+
+    WEBHOOK = os.environ['SLACK_WEBHOOK_URL']
+    INTERVAL = int(os.environ.get('PROBE_INTERVAL_SECONDS', '30'))
+    NAME = os.environ.get('PROBE_WEBHOOK_NAME', 'incidents-demo')
+
+    up = Gauge('slack_webhook_up',
+               'Slack webhook reachable (1) or not (0)',
+               ['webhook'])
+    status_code = Gauge('slack_webhook_last_status_code',
+                        'Last HTTP status from Slack webhook',
+                        ['webhook'])
+    last_probe = Gauge('slack_webhook_last_probe_timestamp_seconds',
+                       'Unix timestamp of last probe attempt',
+                       ['webhook'])
+
+    def probe():
+        try:
+            req = urllib.request.Request(
+                WEBHOOK, data=b'{}', method='POST',
+                headers={'Content-Type': 'application/json'},
+            )
+            resp = urllib.request.urlopen(req, timeout=5)
+            code = resp.status
+        except urllib.error.HTTPError as e:
+            # 400 = "invalid_payload" from Slack — webhook alive + URL valid
+            code = e.code
+        except Exception:
+            code = 0
+        is_up = 1 if code in (200, 400) else 0
+        up.labels(webhook=NAME).set(is_up)
+        status_code.labels(webhook=NAME).set(code)
+        last_probe.labels(webhook=NAME).set(time.time())
+        print(f"probe: code={code} up={is_up}", flush=True)
+
+    start_http_server(8080)
+    while True:
+        probe()
+        time.sleep(INTERVAL)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-probe
+  namespace: k8sgpt-system
+  labels:
+    app: slack-probe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slack-probe
+  template:
+    metadata:
+      labels:
+        app: slack-probe
+    spec:
+      containers:
+      - name: probe
+        image: python:3.14.8-alpine3.24
+        command: ["sh", "-c"]
+        args:
+          - |
+            pip install --quiet --no-cache-dir prometheus_client==0.26.0
+            python /probe/probe.py
+        env:
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: k8sgpt-slack
+              key: webhook-url
+        ports:
+        - containerPort: 8080
+          name: metrics
+        volumeMounts:
+        - name: probe-script
+          mountPath: /probe
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+      volumes:
+      - name: probe-script
+        configMap:
+          name: slack-probe-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slack-probe
+  namespace: k8sgpt-system
+  labels:
+    app: slack-probe
+spec:
+  selector:
+    app: slack-probe
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: slack-probe
+  namespace: k8sgpt-system
+  labels:
+    app: slack-probe
+    # Required for kube-prometheus-stack to discover this ServiceMonitor.
+    release: prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: slack-probe
+  endpoints:
+  - port: metrics
+    interval: 15s

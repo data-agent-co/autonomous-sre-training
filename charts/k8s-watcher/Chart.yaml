@@ -1,0 +1,9 @@
+apiVersion: v2
+name: k8s-watcher
+description: |
+  The workshop's watcher: one Deployment that turns Kubernetes events (EV
+  lane) and changes to opted-in ConfigMaps (CM lane) into K8sGPT Result
+  objects. Needs the K8sGPT operator's Result CRD (core.k8sgpt.ai).
+type: application
+version: 0.1.0
+appVersion: "dev"

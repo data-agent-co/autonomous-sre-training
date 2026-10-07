@@ -1,0 +1,19 @@
+{{- /*
+The namespace both checks create their fixtures in: <fullname>-test. It is
+one hook rather than one per check: two hooks for the same Namespace would
+each run before-hook-creation, and the second would delete the namespace
+the first just created.
+
+No checks with dryRun: the watcher then logs Results instead of writing them.
+*/ -}}
+{{- if and .Values.tests.enabled (not .Values.dryRun) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "k8s-watcher.testNamespace" . }}
+  labels:
+    {{- include "k8s-watcher.testLabels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    {{- include "k8s-watcher.testHook" "-20" | nindent 4 }}
+{{- end }}

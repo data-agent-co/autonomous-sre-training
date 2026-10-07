@@ -1,0 +1,309 @@
+# Slack relay: the one path from the cluster to the Slack channel.
+#
+# 1. Dedupe for the K8sGPT operator's Slack sink. The operator posts to Slack
+#    far more often than once per incident:
+#      - it re-posts a Result it deleted in the same reconcile, because the
+#        status step reads the Result from a cache that still holds it;
+#      - it deletes and re-creates the Result when one 30s scan catches a
+#        crash-looping pod in its brief running window;
+#      - it posts again whenever the Result's error text changes (back-off
+#        message vs. last-termination message).
+#    One OOMKill loop produced four posts. The relay forwards only the first
+#    post per headline (the headline names the object, e.g. "K8sGPT analysis
+#    of the Pod demo-apps/payments-api-...") and drops repeats until that
+#    headline has been quiet for DEDUPE_SECONDS: each dropped repeat restarts
+#    the window, so a fault that stays live is posted once, not once per
+#    window. It answers 200 for the posts it drops so the operator treats
+#    them as sent.
+#
+# 2. Posts the watcher's Results. The operator only posts the Results of its
+#    own scans, so the watcher's (ConfigMap changes) would never reach Slack.
+#    The relay polls Results matching NOTIFY_SELECTOR every POLL_SECONDS and
+#    posts each new Result and each new generation of one (the watcher
+#    updates one Result per ConfigMap on every change). Results that already
+#    exist when the relay starts are not posted.
+#
+# 3. Formats Alertmanager's webhook (POST /alertmanager) for Slack. With Slack
+#    on, Alertmanager sends DemoContainerOOMKilled here; see
+#    helm/alertmanager-slack-values.yaml.
+#
+# Only the operator posts through the HTTP side's dedupe: the k8sgpt-slack-relay
+# secret holds this service's URL and the K8sGPT CR's sink reads that
+# secret. The real webhook stays in k8sgpt-slack, which slack-probe uses
+# directly.
+#
+# scripts/up.sh applies this only when SLACK_WEBHOOK_URL is set. Memory of
+# what was sent lives in the process, so soft-reset.sh restarts this
+# deployment to let the next run post again.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slack-relay-script
+  namespace: k8sgpt-system
+data:
+  relay.py: |
+    import json, os, signal, ssl, threading, time, urllib.error, urllib.parse, urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    UPSTREAM = os.environ['SLACK_WEBHOOK_URL']
+    WINDOW = int(os.environ.get('DEDUPE_SECONDS', '600'))
+    NAMESPACE = os.environ.get('POD_NAMESPACE', 'k8sgpt-system')
+    SELECTOR = os.environ.get('NOTIFY_SELECTOR', '')
+    POLL = int(os.environ.get('POLL_SECONDS', '10'))
+    SA = '/var/run/secrets/kubernetes.io/serviceaccount'
+
+    last_seen = {}
+    lock = threading.Lock()
+
+    def forward(body):
+        req = urllib.request.Request(
+            UPSTREAM, data=body, method='POST',
+            headers={'Content-Type': 'application/json'},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+        except Exception as e:
+            return 502, str(e).encode()
+
+    class Relay(BaseHTTPRequestHandler):
+        def reply(self, code, body=b'ok'):
+            # A client that gave up (a probe past its timeout) is not an
+            # error worth a traceback.
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+        def do_GET(self):
+            self.reply(200)
+
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            if self.path.startswith('/alertmanager'):
+                self.alertmanager(body)
+                return
+            try:
+                headline = json.loads(body).get('text', '')
+            except ValueError:
+                headline = ''
+            now = time.time()
+            with lock:
+                seen_at = last_seen.get(headline)
+                if headline and seen_at is not None and now - seen_at < WINDOW:
+                    # Restart the window: the fault is still live.
+                    last_seen[headline] = now
+                    print(f'dropped repeat ({int(now - seen_at)}s after the last): {headline}', flush=True)
+                    self.reply(200)
+                    return
+                # Claim the headline before posting so a concurrent repeat is
+                # dropped instead of racing this one to Slack.
+                last_seen[headline] = now
+            code, reply = forward(body)
+            if code != 200:
+                # Not delivered: forget it so the operator's retry can post.
+                with lock:
+                    last_seen.pop(headline, None)
+            print(f'forwarded -> {code}: {headline}', flush=True)
+            self.reply(code, reply)
+
+        def alertmanager(self, body):
+            # Alertmanager groups and repeats alerts itself, so no dedupe.
+            try:
+                alerts = json.loads(body).get('alerts', [])
+            except ValueError:
+                self.reply(400)
+                return
+            lines = []
+            for a in alerts:
+                if a.get('status') != 'firing':
+                    continue
+                labels, notes = a.get('labels', {}), a.get('annotations', {})
+                lines.append(f">*[alertmanager] {labels.get('alertname', '')}: "
+                             f"{labels.get('namespace', '')}/{labels.get('pod', '')}*")
+                lines += [f'>{notes[k]}' for k in ('summary', 'description') if notes.get(k)]
+            if not lines:
+                self.reply(200)
+                return
+            code, reply = forward(json.dumps({'text': '\n'.join(lines)}).encode())
+            print(f'alertmanager -> {code}: {lines[0]}', flush=True)
+            self.reply(code, reply)
+
+        def log_message(self, *args):
+            pass
+
+    def list_results():
+        with open(f'{SA}/token') as f:
+            token = f.read().strip()
+        query = urllib.parse.urlencode({'labelSelector': SELECTOR})
+        req = urllib.request.Request(
+            f'https://kubernetes.default.svc/apis/core.k8sgpt.ai/v1alpha1/namespaces/{NAMESPACE}/results?{query}',
+            headers={'Authorization': f'Bearer {token}'},
+        )
+        ctx = ssl.create_default_context(cafile=f'{SA}/ca.crt')
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            return json.load(resp)['items']
+
+    def message(result):
+        spec = result.get('spec', {})
+        errors = [e.get('text', '') for e in spec.get('error') or []]
+        lines = [f">*[{spec.get('backend', 'watcher')}] {spec.get('kind', '')} {spec.get('name', '')}*"]
+        lines += [f'>{e}' for e in errors if e]
+        try:
+            entries = json.loads(spec.get('details') or '{}').get('diff', {}).get('entries', [])
+        except ValueError:
+            entries = []
+        lines += [f">• `{e.get('key')}` {e.get('change')}" for e in entries]
+        lines.append(f">Result: `{NAMESPACE}/{result['metadata']['name']}`")
+        return json.dumps({'text': '\n'.join(lines)}).encode()
+
+    def notify():
+        # uid -> generation last posted (or present at start-up).
+        posted = None
+        while True:
+            try:
+                items = list_results()
+                current = {r['metadata']['uid']: r for r in items}
+                if posted is None:
+                    posted = {u: r['metadata'].get('generation') for u, r in current.items()}
+                    print(f'notifier: watching {len(posted)} Results matching {SELECTOR}', flush=True)
+                for uid, r in current.items():
+                    gen = r['metadata'].get('generation')
+                    if posted.get(uid) == gen:
+                        continue
+                    code, _ = forward(message(r))
+                    print(f"posted Result -> {code}: {r['metadata']['name']} (generation {gen})", flush=True)
+                    if code == 200:
+                        posted[uid] = gen
+                for uid in set(posted) - set(current):
+                    del posted[uid]
+            except Exception as e:
+                print(f'notifier: {e}', flush=True)
+            time.sleep(POLL)
+
+    # As PID 1, Python ignores SIGTERM by default, so each restart would hang
+    # for the 30s grace period failing probes, which K8sGPT then reports.
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+    if SELECTOR:
+        threading.Thread(target=notify, daemon=True).start()
+    server = ThreadingHTTPServer(('', 8080), Relay)
+    print(f'listening on :8080, dedupe window {WINDOW}s', flush=True)
+    server.serve_forever()
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slack-relay
+  namespace: k8sgpt-system
+---
+# Read-only access to the Results it posts.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: slack-relay
+  namespace: k8sgpt-system
+rules:
+- apiGroups: ["core.k8sgpt.ai"]
+  resources: ["results"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: slack-relay
+  namespace: k8sgpt-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: slack-relay
+subjects:
+- kind: ServiceAccount
+  name: slack-relay
+  namespace: k8sgpt-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-relay
+  namespace: k8sgpt-system
+  labels:
+    app: slack-relay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slack-relay
+  template:
+    metadata:
+      labels:
+        app: slack-relay
+    spec:
+      serviceAccountName: slack-relay
+      containers:
+      - name: relay
+        image: python:3.14.8-alpine3.24
+        command: ["python", "/relay/relay.py"]
+        env:
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: k8sgpt-slack
+              key: webhook-url
+        - name: DEDUPE_SECONDS
+          value: "600"
+        # The watcher's ConfigMap Results; empty turns the notifier off.
+        - name: NOTIFY_SELECTOR
+          value: k8sgpt-detection-pack.io/component=cm
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8080
+          name: http
+        # Give Python a head start, so the pod doesn't fail its first probes
+        # (and show up as unhealthy) while it starts.
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          # The default 1s is too short while the OOMKill demo loads the node.
+          timeoutSeconds: 3
+        volumeMounts:
+        - name: relay-script
+          mountPath: /relay
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            # Python needs more than 100m to start within the probe delay.
+            cpu: 500m
+            memory: 64Mi
+      volumes:
+      - name: relay-script
+        configMap:
+          name: slack-relay-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slack-relay
+  namespace: k8sgpt-system
+  labels:
+    app: slack-relay
+spec:
+  selector:
+    app: slack-relay
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

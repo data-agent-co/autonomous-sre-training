@@ -1,0 +1,4 @@
+.env
+*.log
+# PID files and logs of background helpers and up.sh runs.
+.run/

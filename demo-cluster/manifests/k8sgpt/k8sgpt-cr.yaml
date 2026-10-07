@@ -1,0 +1,75 @@
+# K8sGPT custom resource. A template: scripts/up.sh fills in the ${...}
+# values with sed (from .env and the versions pinned in up.sh) and
+# applies it.
+#
+#   K8SGPT_AI_ENABLED  true when an LLM is configured (LLM_API_KEY set, or
+#                      K8SGPT_LOCAL=true). With false, K8sGPT still finds
+#                      problems and writes Results, without AI explanations.
+#   K8SGPT_BACKEND, K8SGPT_MODEL, K8SGPT_BASE_URL  see .env.example
+#   K8SGPT_VERSION     K8sGPT image tag
+#   K8SGPT_AI_HASH     checksum of the key, backend, model and URL (never
+#                      the key itself)
+#
+# Schema is per K8sGPT operator v0.2.x (`kubectl explain k8sgpts.spec`).
+apiVersion: core.k8sgpt.ai/v1alpha1
+kind: K8sGPT
+metadata:
+  name: k8sgpt-sample
+  namespace: k8sgpt-system
+spec:
+  ai:
+    enabled: ${K8SGPT_AI_ENABLED}
+    backend: ${K8SGPT_BACKEND}
+    model: ${K8SGPT_MODEL}
+    # Empty means the backend's own endpoint. Set K8SGPT_BASE_URL to reach
+    # an OpenAI-compatible API instead, e.g. Claude through
+    # https://api.anthropic.com/v1/ with backend openai, or a model served
+    # on your laptop (K8SGPT_LOCAL=true).
+    baseUrl: ${K8SGPT_BASE_URL}
+    # Holds LLM_API_KEY. up.sh always creates it, with a placeholder when
+    # there is no key, so this reference resolves; K8sGPT only uses it when
+    # AI is enabled.
+    secret:
+      name: k8sgpt-llm
+      key: api-key
+    # Exponential backoff between scans when the LLM returns errors
+    # (e.g. 429 rate limits on a free tier). Without this, K8sGPT retries
+    # every ~2s and burns quota instantly.
+    backOff:
+      enabled: true
+      maxRetries: 5
+  noCache: false
+  # Scan only the demo apps. Cluster-wide, K8sGPT also reports the demo's
+  # own components while they start (slack-relay or the watcher failing
+  # their first readiness probes), which reads as incidents.
+  targetNamespace: demo-apps
+  # Pod analyzer only: a CrashLoopBackOff is surfaced by the Pod analyzer
+  # alone. The Deployment and Service analyzers add 2-3x LLM calls per scan
+  # without finding more in this demo. Add them back for broader use.
+  filters:
+    - Pod
+  repository: ghcr.io/k8sgpt-ai/k8sgpt
+  version: ${K8SGPT_VERSION}
+  # The pod reads the key from the secret above only when it starts. With
+  # a checksum of the key and the other AI settings in the pod template, a
+  # new key changes the template and the operator replaces the pod.
+  podAnnotations:
+    sre-training/llm-config-hash: "${K8SGPT_AI_HASH}"
+  # Keep the sink last: when SLACK_WEBHOOK_URL is empty, up.sh drops
+  # everything from `sink:` to the end of this file, and Results stay in the
+  # cluster (kubectl get results -n k8sgpt-system).
+  sink:
+    type: slack
+    # Not a URL and never used for sending: the webhook in the secret below
+    # always wins. The operator re-posts a Result on every ~30s reconcile
+    # while status.webhook is empty, and it fills status.webhook from this
+    # field. Left empty, one OOMKill produced six identical Slack posts in
+    # 2.5 minutes; with it, a Result posts when it is created and again only
+    # when its findings (the error texts) change.
+    webhook: k8sgpt-slack-secret
+    # The slack-relay service's URL, not Slack's: the relay forwards one
+    # post per object and drops the operator's repeats
+    # (manifests/slack-relay/deployment.yaml).
+    secret:
+      name: k8sgpt-slack-relay
+      key: webhook-url

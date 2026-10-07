@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    {{- if .Values.ev.enabled }}
+    - name: ev-http
+      port: {{ .Values.ev.port }}
+      targetPort: ev-http
+      protocol: TCP
+    {{- end }}
+    {{- if .Values.cm.enabled }}
+    - name: cm-http
+      port: {{ .Values.cm.port }}
+      targetPort: cm-http
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "k8s-watcher.selectorLabels" . | nindent 4 }}

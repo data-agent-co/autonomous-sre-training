@@ -1,0 +1,80 @@
+# kube-prometheus-stack values tuned for a laptop demo cluster.
+# Disables the heavy bits we don't need; keeps Prometheus, Grafana, Alertmanager,
+# kube-state-metrics, and node-exporter.
+
+grafana:
+  adminPassword: admin
+  service:
+    type: ClusterIP
+  defaultDashboardsEnabled: true
+  persistence:
+    enabled: false
+  # Anonymous read-only access, so dashboard links open without a login.
+  # Kind-only demo cluster, reached through a local port-forward; do NOT
+  # copy this block to a real environment.
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+
+prometheus:
+  prometheusSpec:
+    # Demo-tuned 5s scrape for snappy dashboard updates. Production deployments
+    # typically use 15-30s. Increases storage ~6x and CPU ~2x on Prometheus but
+    # is fine for a laptop kind cluster with our small target count.
+    scrapeInterval: 5s
+    evaluationInterval: 5s
+    retention: 6h
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 768Mi
+        cpu: 750m
+    # The demo apps are scraped through their ServiceMonitors
+    # (manifests/*/servicemonitor.yaml); pod memory comes from cAdvisor and
+    # kube-state-metrics.
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 20m
+      limits:
+        memory: 128Mi
+        cpu: 100m
+
+# Disable bits we don't need on a laptop demo.
+kubeApiServer:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+# Fires within seconds of an OOMKill in demo-apps, minutes before K8sGPT
+# reports the pod (its Pod analyzer waits for CrashLoopBackOff). It stays
+# firing while the container keeps being OOMKilled at least every 10
+# minutes, so a crash loop is one alert. With Slack on, Alertmanager posts it
+# through slack-relay (helm/alertmanager-slack-values.yaml).
+additionalPrometheusRulesMap:
+  demo-oomkill:
+    groups:
+    - name: demo-apps
+      rules:
+      - alert: DemoContainerOOMKilled
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="demo-apps"}[10m]) > 0
+          and on (namespace, pod, container)
+          kube_pod_container_status_last_terminated_reason{namespace="demo-apps", reason="OOMKilled"} == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled
+          description: The container went past its memory limit and the kernel killed it; the kubelet restarts it.

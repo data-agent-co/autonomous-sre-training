@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payments-api
+  namespace: demo-apps
+  labels:
+    # kube-prometheus-stack's Prometheus selects ServiceMonitors with this
+    # release label by default.
+    release: prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [demo-apps]
+  selector:
+    matchLabels:
+      app: payments-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s

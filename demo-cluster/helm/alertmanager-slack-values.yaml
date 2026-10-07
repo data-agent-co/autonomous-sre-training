@@ -1,0 +1,30 @@
+# Extra kube-prometheus-stack values that scripts/up.sh adds only when
+# SLACK_WEBHOOK_URL is set: Alertmanager posts DemoContainerOOMKilled (see
+# helm/prometheus-stack-values.yaml) to slack-relay, which formats it and
+# forwards it to the Slack webhook. Every other alert stays on "null".
+#
+# Lists replace the chart's defaults, so the default Watchdog route and the
+# "null" receiver are repeated here.
+alertmanager:
+  config:
+    route:
+      receiver: "null"
+      group_by: [namespace]
+      routes:
+      - receiver: "null"
+        matchers:
+        - alertname = "Watchdog"
+      - receiver: slack-relay
+        matchers:
+        - alertname = "DemoContainerOOMKilled"
+        group_by: [alertname, namespace, pod, container]
+        group_wait: 10s
+        group_interval: 1m
+        # One post per firing alert: a crash loop keeps it firing.
+        repeat_interval: 24h
+    receivers:
+    - name: "null"
+    - name: slack-relay
+      webhook_configs:
+      - url: http://slack-relay.k8sgpt-system.svc.cluster.local/alertmanager
+        send_resolved: false

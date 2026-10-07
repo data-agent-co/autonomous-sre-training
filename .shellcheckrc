@@ -1,0 +1,3 @@
+# Resolve `# shellcheck source=lib.sh` relative to the script, not to the
+# directory shellcheck runs from.
+source-path=SCRIPTDIR

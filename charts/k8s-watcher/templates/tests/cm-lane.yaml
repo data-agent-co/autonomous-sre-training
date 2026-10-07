@@ -1,0 +1,42 @@
+{{- /*
+helm test check for the CM lane. Creates a ConfigMap that carries the
+k8sgpt-detection-pack.io/critical=true opt-in; the lane reports the create
+as a cm_mutation Result for that ConfigMap.
+*/ -}}
+{{- if and .Values.tests.enabled (not .Values.dryRun) .Values.cm.enabled }}
+{{- $name := printf "%s-test-cm" (include "k8s-watcher.fullname" .) }}
+{{- $rules := list (dict "apiGroups" (list "") "resources" (list "configmaps") "verbs" (list "create" "get" "patch" "delete")) }}
+{{ include "k8s-watcher.testAccess" (dict "root" . "name" $name "rules" $rules) }}
+---
+{{ include "k8s-watcher.testPod" (dict "root" . "name" $name "script" (include "k8s-watcher.testScript.cm" .)) }}
+{{- end }}
+
+{{- define "k8s-watcher.testScript.cm" -}}
+cm="cm-check-$(date +%s)"
+backend=k8sgpt-detection-pack:cm
+lane=k8sgpt-detection-pack.io/component=cm
+selector=$lane,k8sgpt-detection-pack.io/signal_type=cm_mutation
+
+cleanup() {
+  # Opt out first (kubectl label: get + patch): the lane reports neither
+  # dropping the label nor deleting an opted-out ConfigMap, so no new
+  # Result appears after forget.
+  kubectl -n "$TEST_NAMESPACE" label configmap "$cm" k8sgpt-detection-pack.io/critical- || true
+  kubectl -n "$TEST_NAMESPACE" delete configmap "$cm" --ignore-not-found --wait=false || true
+  forget ConfigMap "$TEST_NAMESPACE/$cm" "$backend" "$lane" || true
+}
+trap cleanup EXIT
+
+echo "creating ConfigMap $TEST_NAMESPACE/$cm with the critical label"
+kubectl -n "$TEST_NAMESPACE" create -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $cm
+  labels:
+    k8sgpt-detection-pack.io/critical: "true"
+data:
+  key: value
+EOF
+await ConfigMap "$TEST_NAMESPACE/$cm" "$backend" "$selector"
+{{- end -}}

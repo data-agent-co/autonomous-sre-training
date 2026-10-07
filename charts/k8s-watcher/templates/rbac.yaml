@@ -1,0 +1,77 @@
+{{- /*
+RBAC for the watcher: only the API calls it makes.
+
+  1. ClusterRole + ClusterRoleBinding for the cluster-wide informers of the
+     enabled lanes. Informers only list and watch; lookups are served from
+     their cache. EV lane: core/v1 events (not events.k8s.io) and, with
+     probe enrichment, pods. CM lane: configmaps. No secrets.
+  2. Role + RoleBinding in resultNamespace for the Results both lanes
+     write: get, then create or update.
+*/ -}}
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}-watch
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+rules:
+  {{- if .Values.ev.enabled }}
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch"]
+  {{- if .Values.ev.probeEnrichment.enabled }}
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+  {{- end }}
+  {{- end }}
+  {{- if .Values.cm.enabled }}
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["list", "watch"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}-watch
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "k8s-watcher.fullname" . }}-watch
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-watcher.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}-results
+  namespace: {{ .Values.resultNamespace }}
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["core.k8sgpt.ai"]
+    resources: ["results"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "k8s-watcher.fullname" . }}-results
+  namespace: {{ .Values.resultNamespace }}
+  labels:
+    {{- include "k8s-watcher.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "k8s-watcher.fullname" . }}-results
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-watcher.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

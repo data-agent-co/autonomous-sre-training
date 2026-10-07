@@ -1,0 +1,28 @@
+# Values for the watcher release (charts/k8s-watcher), installed by
+# scripts/up.sh:
+#
+#   helm -n k8sgpt-system upgrade --install k8s-watcher \
+#     charts/k8s-watcher -f demo-cluster/helm/watcher-values.yaml
+#
+# The demo runs the CM lane only: it writes a Result when a ConfigMap
+# labelled k8sgpt-detection-pack.io/critical=true is created, changed or
+# deleted. The EV lane (Kubernetes Warning events) stays off.
+
+ev:
+  enabled: false
+
+cm:
+  enabled: true
+
+image:
+  # Built from k8s-watcher/ and `kind load`ed by scripts/up.sh; never pulled.
+  repository: k8s-watcher
+  tag: dev
+  pullPolicy: Never
+
+# Label matches kube-prometheus-stack's serviceMonitorSelector (its Helm
+# release name), so Prometheus scrapes the watcher.
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus-stack

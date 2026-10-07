@@ -1,0 +1,5 @@
+# LICENSE-APACHE and NOTICE stay in the context: the image ships them.
+bin/
+**/*_test.go
+*.md
+.DS_Store
