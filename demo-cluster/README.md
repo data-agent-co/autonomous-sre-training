@@ -111,7 +111,8 @@ These are read from your shell, not from `.env`:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CLUSTER_NAME` | `demo-cluster` | The kind cluster every script acts on, through the context `kind-<name>`. |
+| `CLUSTER_NAME` | `demo-cluster` | The cluster every script acts on, through the context `<provider>-<name>`. |
+| `CLUSTER_PROVIDER` | `kind` | `kind` or `k3d`. See [Using k3d instead of kind](#using-k3d-instead-of-kind). |
 | `GRAFANA_PORT` | `3000` | Local port for the Grafana port-forward. |
 | `ENV_FILE` | `demo-cluster/.env` | Settings file. A missing default file is fine; a missing file you named is an error. A relative path is relative to your current directory. |
 | `KIND_NODE_IMAGE` | the pinned `kindest/node:v1.37.0` | Node image for a new cluster. Set it empty to use your kind version's default. |
@@ -122,6 +123,29 @@ Grafana port, and use the same prefix for every script you run against it:
 ```bash
 CLUSTER_NAME=demo-2 GRAFANA_PORT=3001 ./scripts/up.sh
 CLUSTER_NAME=demo-2 ./scripts/trigger-oomkill.sh
+```
+
+### Using k3d instead of kind
+
+With `CLUSTER_PROVIDER=k3d`, the scripts act on the
+[k3d](https://k3d.io) cluster `$CLUSTER_NAME` through the context
+`k3d-$CLUSTER_NAME`, with the same safety check as for kind. You need k3d
+instead of kind; tested with k3d v5.9.0 (k3s v1.35.5).
+
+- `up.sh` reuses the cluster if it exists, or creates it with one server and
+  two agents. `KIND_NODE_IMAGE` is ignored.
+- Local images are loaded with `k3d image import`.
+- k3s ships its own metrics-server, so `up.sh` waits for it instead of
+  installing the upstream one.
+- `down.sh` and `reset.sh` delete the cluster with `k3d cluster delete`.
+
+Use the same prefix for every script, for example with an existing k3d
+cluster `dev`:
+
+```bash
+CLUSTER_PROVIDER=k3d CLUSTER_NAME=dev ./scripts/up.sh
+CLUSTER_PROVIDER=k3d CLUSTER_NAME=dev ./scripts/trigger-oomkill.sh
+kubectl --context k3d-dev -n k8sgpt-system get results
 ```
 
 ### What up.sh does

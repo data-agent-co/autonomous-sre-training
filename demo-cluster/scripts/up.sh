@@ -95,7 +95,7 @@ fi
 
 # --- Prerequisites -----------------------------------------------------------
 missing=()
-for tool in docker kind kubectl helm curl; do
+for tool in docker "$CLUSTER_PROVIDER" kubectl helm curl; do
   command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
 done
 if [[ ${#missing[@]} -gt 0 ]]; then
@@ -189,8 +189,10 @@ optional_step() { run_step optional "$@"; }
 
 # --- Step bodies -------------------------------------------------------------
 do_cluster() {
-  if kind_cluster_exists; then
-    echo "kind cluster '$CLUSTER_NAME' already exists, reusing it"
+  if cluster_exists; then
+    echo "$CLUSTER_PROVIDER cluster '$CLUSTER_NAME' already exists, reusing it"
+  elif [[ "$CLUSTER_PROVIDER" == "k3d" ]]; then
+    k3d cluster create "$CLUSTER_NAME" --servers 1 --agents 2 --wait --timeout 120s
   elif [[ -n "$KIND_NODE_IMAGE" ]]; then
     kind create cluster --name "$CLUSTER_NAME" --config kind-config.yaml \
       --image "$KIND_NODE_IMAGE" --wait 120s
@@ -207,6 +209,10 @@ do_namespaces() {
 }
 
 do_metrics_server() {
+  if [[ "$CLUSTER_PROVIDER" == "k3d" ]]; then
+    demo_kubectl -n kube-system rollout status deploy/metrics-server --timeout=120s
+    return
+  fi
   # metrics-server backs `kubectl top` and scripts/leak-progress.sh. kind's
   # kubelets use self-signed certs, so --kubelet-insecure-tls is mandatory.
   demo_kubectl apply -f \
@@ -224,7 +230,7 @@ do_metrics_server() {
 do_build_images() {
   docker build -q -t payments-api:demo manifests/payments-api/
   docker build -q -t recommend-svc:demo manifests/recommend-svc/
-  kind load docker-image payments-api:demo recommend-svc:demo --name "$CLUSTER_NAME"
+  load_images payments-api:demo recommend-svc:demo
 }
 
 do_deploy_apps() {
@@ -388,7 +394,7 @@ do_k8sgpt() {
 
 do_watcher() {
   docker build -q -t "$WATCHER_IMAGE" "$REPO_ROOT/k8s-watcher"
-  kind load docker-image "$WATCHER_IMAGE" --name "$CLUSTER_NAME"
+  load_images "$WATCHER_IMAGE"
 
   local upgrading=0
   if demo_helm -n "$NS_K8SGPT" status "$WATCHER_RELEASE" >/dev/null 2>&1; then
@@ -421,12 +427,12 @@ do_smoke_test() {
 
 # --- Run ---------------------------------------------------------------------
 echo
-echo "Bringing up kind cluster '$CLUSTER_NAME' (context $KUBE_CONTEXT)"
+echo "Bringing up $CLUSTER_PROVIDER cluster '$CLUSTER_NAME' (context $KUBE_CONTEXT)"
 echo "  AI explanations: $AI_SUMMARY"
 echo "  Slack:           $SLACK_SUMMARY"
 echo
 
-step "kind cluster"                   do_cluster
+step "$CLUSTER_PROVIDER cluster"       do_cluster
 step "namespaces"                     do_namespaces
 step "metrics-server"                 do_metrics_server
 step "build + load sample images"     do_build_images
