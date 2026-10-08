@@ -21,6 +21,8 @@ The cluster runs on your laptop. An LLM and Slack are optional.
 | curl, bash | bash 3.2 (the macOS default) or later | bash 3.2.57 |
 
 `up.sh` checks for these tools and for a running Docker before it starts.
+To run the demo on a [k3d](https://k3d.io) cluster instead of kind, see
+[Using k3d instead of kind](demo-cluster/README.md#using-k3d-instead-of-kind).
 You don't need Python or Go on your machine: the apps and the watcher are
 built and run in Docker. Go is only for working on the watcher (see
 [Repo layout](#repo-layout)).
