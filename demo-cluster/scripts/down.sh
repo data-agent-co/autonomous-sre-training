@@ -20,8 +20,10 @@ if stop_pidfile "$OOM_LOOP_PIDFILE" "$OOM_LOOP_MATCH"; then
   echo "stopped the OOMKill loop"
 fi
 
-if kind_cluster_exists; then
-  kind delete cluster --name "$CLUSTER_NAME"
+if ! cluster_exists; then
+  echo "$CLUSTER_PROVIDER cluster '$CLUSTER_NAME' not found; nothing to delete"
+elif [[ "$CLUSTER_PROVIDER" == "k3d" ]]; then
+  k3d cluster delete "$CLUSTER_NAME"
 else
-  echo "kind cluster '$CLUSTER_NAME' not found; nothing to delete"
+  kind delete cluster --name "$CLUSTER_NAME"
 fi
