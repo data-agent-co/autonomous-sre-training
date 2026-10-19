@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+<title id="title">Build your own autonomous SRE in minutes</title>
+<desc id="desc">An agent inside a Kubernetes cluster inspects nodes and flags an OOMKilled payments-api pod. Hands-on workshop with K8sGPT, Prometheus and Grafana on a local kind cluster. Powered by DataAgent.</desc>
+<rect width="1280" height="640" rx="16" fill="#fafaf7"/>
+<line x1="1052.0" y1="341.2" x2="1026.3" y2="414.1" stroke="#a0a7b3" stroke-width="1.25" stroke-dasharray="4 5" stroke-linecap="round"/>
+<line x1="1089.5" y1="345.5" x2="1105.9" y2="489.1" stroke="#a0a7b3" stroke-width="1.25" stroke-dasharray="4 5" stroke-linecap="round"/>
+<line x1="1114.6" y1="338.5" x2="1166.2" y2="452.7" stroke="#a0a7b3" stroke-width="1.25" stroke-dasharray="4 5" stroke-linecap="round"/>
+<line x1="1019.8" y1="320.5" x2="879.6" y2="456.8" stroke="#c94f27" stroke-width="1.75" stroke-linecap="round"/>
+<polygon points="96.0,419.0 107.3,425.5 107.3,438.5 96.0,445.0 84.7,438.5 84.7,425.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="140.0,419.0 151.3,425.5 151.3,438.5 140.0,445.0 128.7,438.5 128.7,425.5" fill="#ffffff" stroke="#e3e5e8" stroke-width="1.25"/>
+<polygon points="184.0,419.0 195.3,425.5 195.3,438.5 184.0,445.0 172.7,438.5 172.7,425.5" fill="#ffffff" stroke="#e2e3e6" stroke-width="1.25"/>
+<polygon points="228.0,419.0 239.3,425.5 239.3,438.5 228.0,445.0 216.7,438.5 216.7,425.5" fill="#ffffff" stroke="#dfe1e4" stroke-width="1.25"/>
+<polygon points="272.0,419.0 283.3,425.5 283.3,438.5 272.0,445.0 260.7,438.5 260.7,425.5" fill="#ffffff" stroke="#dcdee2" stroke-width="1.25"/>
+<polygon points="316.0,419.0 327.3,425.5 327.3,438.5 316.0,445.0 304.7,438.5 304.7,425.5" fill="#ffffff" stroke="#d9dbe0" stroke-width="1.25"/>
+<polygon points="360.0,419.0 371.3,425.5 371.3,438.5 360.0,445.0 348.7,438.5 348.7,425.5" fill="#ffffff" stroke="#d6d8dd" stroke-width="1.25"/>
+<polygon points="404.0,419.0 415.3,425.5 415.3,438.5 404.0,445.0 392.7,438.5 392.7,425.5" fill="#ffffff" stroke="#d2d4da" stroke-width="1.25"/>
+<polygon points="448.0,419.0 459.3,425.5 459.3,438.5 448.0,445.0 436.7,438.5 436.7,425.5" fill="#ffffff" stroke="#ced1d7" stroke-width="1.25"/>
+<polygon points="492.0,419.0 503.3,425.5 503.3,438.5 492.0,445.0 480.7,438.5 480.7,425.5" fill="#ffffff" stroke="#cacdd4" stroke-width="1.25"/>
+<polygon points="536.0,419.0 547.3,425.5 547.3,438.5 536.0,445.0 524.7,438.5 524.7,425.5" fill="#ffffff" stroke="#c6c9d1" stroke-width="1.25"/>
+<polygon points="580.0,419.0 591.3,425.5 591.3,438.5 580.0,445.0 568.7,438.5 568.7,425.5" fill="#ffffff" stroke="#c1c5cd" stroke-width="1.25"/>
+<polygon points="624.0,419.0 635.3,425.5 635.3,438.5 624.0,445.0 612.7,438.5 612.7,425.5" fill="#ffffff" stroke="#bdc1ca" stroke-width="1.25"/>
+<polygon points="668.0,419.0 679.3,425.5 679.3,438.5 668.0,445.0 656.7,438.5 656.7,425.5" fill="#ffffff" stroke="#b9bdc6" stroke-width="1.25"/>
+<polygon points="712.0,419.0 723.3,425.5 723.3,438.5 712.0,445.0 700.7,438.5 700.7,425.5" fill="#ffffff" stroke="#b4b9c3" stroke-width="1.25"/>
+<polygon points="756.0,419.0 767.3,425.5 767.3,438.5 756.0,445.0 744.7,438.5 744.7,425.5" fill="#ffffff" stroke="#b0b5c0" stroke-width="1.25"/>
+<polygon points="800.0,419.0 811.3,425.5 811.3,438.5 800.0,445.0 788.7,438.5 788.7,425.5" fill="#ffffff" stroke="#acb1bc" stroke-width="1.25"/>
+<polygon points="844.0,419.0 855.3,425.5 855.3,438.5 844.0,445.0 832.7,438.5 832.7,425.5" fill="#ffffff" stroke="#a8aeb9" stroke-width="1.25"/>
+<polygon points="888.0,419.0 899.3,425.5 899.3,438.5 888.0,445.0 876.7,438.5 876.7,425.5" fill="#ffffff" stroke="#a4abb7" stroke-width="1.25"/>
+<polygon points="932.0,419.0 943.3,425.5 943.3,438.5 932.0,445.0 920.7,438.5 920.7,425.5" fill="#ffffff" stroke="#a1a8b4" stroke-width="1.25"/>
+<polygon points="976.0,419.0 987.3,425.5 987.3,438.5 976.0,445.0 964.7,438.5 964.7,425.5" fill="#ffffff" stroke="#9fa5b2" stroke-width="1.25"/>
+<polygon points="1064.0,419.0 1075.3,425.5 1075.3,438.5 1064.0,445.0 1052.7,438.5 1052.7,425.5" fill="#ffffff" stroke="#9ca3b0" stroke-width="1.25"/>
+<polygon points="1108.0,419.0 1119.3,425.5 1119.3,438.5 1108.0,445.0 1096.7,438.5 1096.7,425.5" fill="#ffffff" stroke="#9ca3b0" stroke-width="1.25"/>
+<polygon points="1152.0,419.0 1163.3,425.5 1163.3,438.5 1152.0,445.0 1140.7,438.5 1140.7,425.5" fill="#ffffff" stroke="#9da4b1" stroke-width="1.25"/>
+<polygon points="118.0,457.0 129.3,463.5 129.3,476.5 118.0,483.0 106.7,476.5 106.7,463.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="162.0,457.0 173.3,463.5 173.3,476.5 162.0,483.0 150.7,476.5 150.7,463.5" fill="#ffffff" stroke="#e3e4e8" stroke-width="1.25"/>
+<polygon points="206.0,457.0 217.3,463.5 217.3,476.5 206.0,483.0 194.7,476.5 194.7,463.5" fill="#ffffff" stroke="#e2e3e6" stroke-width="1.25"/>
+<polygon points="250.0,457.0 261.3,463.5 261.3,476.5 250.0,483.0 238.7,476.5 238.7,463.5" fill="#ffffff" stroke="#dfe1e4" stroke-width="1.25"/>
+<polygon points="294.0,457.0 305.3,463.5 305.3,476.5 294.0,483.0 282.7,476.5 282.7,463.5" fill="#ffffff" stroke="#dcdee2" stroke-width="1.25"/>
+<polygon points="338.0,457.0 349.3,463.5 349.3,476.5 338.0,483.0 326.7,476.5 326.7,463.5" fill="#ffffff" stroke="#d9dbe0" stroke-width="1.25"/>
+<polygon points="382.0,457.0 393.3,463.5 393.3,476.5 382.0,483.0 370.7,476.5 370.7,463.5" fill="#ffffff" stroke="#d6d8dd" stroke-width="1.25"/>
+<polygon points="426.0,457.0 437.3,463.5 437.3,476.5 426.0,483.0 414.7,476.5 414.7,463.5" fill="#ffffff" stroke="#d2d5da" stroke-width="1.25"/>
+<polygon points="470.0,457.0 481.3,463.5 481.3,476.5 470.0,483.0 458.7,476.5 458.7,463.5" fill="#ffffff" stroke="#cfd1d7" stroke-width="1.25"/>
+<polygon points="514.0,457.0 525.3,463.5 525.3,476.5 514.0,483.0 502.7,476.5 502.7,463.5" fill="#ffffff" stroke="#cbced4" stroke-width="1.25"/>
+<polygon points="558.0,457.0 569.3,463.5 569.3,476.5 558.0,483.0 546.7,476.5 546.7,463.5" fill="#ffffff" stroke="#c7cad1" stroke-width="1.25"/>
+<polygon points="602.0,457.0 613.3,463.5 613.3,476.5 602.0,483.0 590.7,476.5 590.7,463.5" fill="#ffffff" stroke="#c3c7ce" stroke-width="1.25"/>
+<polygon points="646.0,457.0 657.3,463.5 657.3,476.5 646.0,483.0 634.7,476.5 634.7,463.5" fill="#ffffff" stroke="#bfc3cb" stroke-width="1.25"/>
+<polygon points="690.0,457.0 701.3,463.5 701.3,476.5 690.0,483.0 678.7,476.5 678.7,463.5" fill="#ffffff" stroke="#bbbfc8" stroke-width="1.25"/>
+<polygon points="734.0,457.0 745.3,463.5 745.3,476.5 734.0,483.0 722.7,476.5 722.7,463.5" fill="#ffffff" stroke="#b7bcc5" stroke-width="1.25"/>
+<polygon points="778.0,457.0 789.3,463.5 789.3,476.5 778.0,483.0 766.7,476.5 766.7,463.5" fill="#ffffff" stroke="#b3b8c2" stroke-width="1.25"/>
+<polygon points="822.0,457.0 833.3,463.5 833.3,476.5 822.0,483.0 810.7,476.5 810.7,463.5" fill="#ffffff" stroke="#b0b5bf" stroke-width="1.25"/>
+<polygon points="910.0,457.0 921.3,463.5 921.3,476.5 910.0,483.0 898.7,476.5 898.7,463.5" fill="#ffffff" stroke="#aab0bb" stroke-width="1.25"/>
+<polygon points="954.0,457.0 965.3,463.5 965.3,476.5 954.0,483.0 942.7,476.5 942.7,463.5" fill="#ffffff" stroke="#a7adb9" stroke-width="1.25"/>
+<polygon points="998.0,457.0 1009.3,463.5 1009.3,476.5 998.0,483.0 986.7,476.5 986.7,463.5" fill="#ffffff" stroke="#a6acb8" stroke-width="1.25"/>
+<polygon points="1042.0,457.0 1053.3,463.5 1053.3,476.5 1042.0,483.0 1030.7,476.5 1030.7,463.5" fill="#ffffff" stroke="#a5abb7" stroke-width="1.25"/>
+<polygon points="1086.0,457.0 1097.3,463.5 1097.3,476.5 1086.0,483.0 1074.7,476.5 1074.7,463.5" fill="#ffffff" stroke="#a4abb7" stroke-width="1.25"/>
+<polygon points="1130.0,457.0 1141.3,463.5 1141.3,476.5 1130.0,483.0 1118.7,476.5 1118.7,463.5" fill="#ffffff" stroke="#a5abb7" stroke-width="1.25"/>
+<polygon points="96.0,495.0 107.3,501.5 107.3,514.5 96.0,521.0 84.7,514.5 84.7,501.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="140.0,495.0 151.3,501.5 151.3,514.5 140.0,521.0 128.7,514.5 128.7,501.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="184.0,495.0 195.3,501.5 195.3,514.5 184.0,521.0 172.7,514.5 172.7,501.5" fill="#ffffff" stroke="#e3e5e8" stroke-width="1.25"/>
+<polygon points="228.0,495.0 239.3,501.5 239.3,514.5 228.0,521.0 216.7,514.5 216.7,501.5" fill="#ffffff" stroke="#e2e3e6" stroke-width="1.25"/>
+<polygon points="272.0,495.0 283.3,501.5 283.3,514.5 272.0,521.0 260.7,514.5 260.7,501.5" fill="#ffffff" stroke="#dfe1e4" stroke-width="1.25"/>
+<polygon points="316.0,495.0 327.3,501.5 327.3,514.5 316.0,521.0 304.7,514.5 304.7,501.5" fill="#ffffff" stroke="#dddee2" stroke-width="1.25"/>
+<polygon points="360.0,495.0 371.3,501.5 371.3,514.5 360.0,521.0 348.7,514.5 348.7,501.5" fill="#ffffff" stroke="#dadce0" stroke-width="1.25"/>
+<polygon points="404.0,495.0 415.3,501.5 415.3,514.5 404.0,521.0 392.7,514.5 392.7,501.5" fill="#ffffff" stroke="#d7d9de" stroke-width="1.25"/>
+<polygon points="448.0,495.0 459.3,501.5 459.3,514.5 448.0,521.0 436.7,514.5 436.7,501.5" fill="#ffffff" stroke="#d3d6db" stroke-width="1.25"/>
+<polygon points="492.0,495.0 503.3,501.5 503.3,514.5 492.0,521.0 480.7,514.5 480.7,501.5" fill="#ffffff" stroke="#d0d3d8" stroke-width="1.25"/>
+<polygon points="536.0,495.0 547.3,501.5 547.3,514.5 536.0,521.0 524.7,514.5 524.7,501.5" fill="#ffffff" stroke="#cccfd6" stroke-width="1.25"/>
+<polygon points="580.0,495.0 591.3,501.5 591.3,514.5 580.0,521.0 568.7,514.5 568.7,501.5" fill="#ffffff" stroke="#c9ccd3" stroke-width="1.25"/>
+<polygon points="624.0,495.0 635.3,501.5 635.3,514.5 624.0,521.0 612.7,514.5 612.7,501.5" fill="#ffffff" stroke="#c5c9d0" stroke-width="1.25"/>
+<polygon points="668.0,495.0 679.3,501.5 679.3,514.5 668.0,521.0 656.7,514.5 656.7,501.5" fill="#ffffff" stroke="#c2c5cd" stroke-width="1.25"/>
+<polygon points="712.0,495.0 723.3,501.5 723.3,514.5 712.0,521.0 700.7,514.5 700.7,501.5" fill="#ffffff" stroke="#bec2cb" stroke-width="1.25"/>
+<polygon points="756.0,495.0 767.3,501.5 767.3,514.5 756.0,521.0 744.7,514.5 744.7,501.5" fill="#ffffff" stroke="#bbbfc8" stroke-width="1.25"/>
+<polygon points="800.0,495.0 811.3,501.5 811.3,514.5 800.0,521.0 788.7,514.5 788.7,501.5" fill="#ffffff" stroke="#b7bcc5" stroke-width="1.25"/>
+<polygon points="844.0,495.0 855.3,501.5 855.3,514.5 844.0,521.0 832.7,514.5 832.7,501.5" fill="#ffffff" stroke="#b5b9c3" stroke-width="1.25"/>
+<polygon points="888.0,495.0 899.3,501.5 899.3,514.5 888.0,521.0 876.7,514.5 876.7,501.5" fill="#ffffff" stroke="#b2b7c1" stroke-width="1.25"/>
+<polygon points="932.0,495.0 943.3,501.5 943.3,514.5 932.0,521.0 920.7,514.5 920.7,501.5" fill="#ffffff" stroke="#b0b5bf" stroke-width="1.25"/>
+<polygon points="976.0,495.0 987.3,501.5 987.3,514.5 976.0,521.0 964.7,514.5 964.7,501.5" fill="#ffffff" stroke="#aeb3be" stroke-width="1.25"/>
+<polygon points="1020.0,495.0 1031.3,501.5 1031.3,514.5 1020.0,521.0 1008.7,514.5 1008.7,501.5" fill="#ffffff" stroke="#adb2bd" stroke-width="1.25"/>
+<polygon points="1064.0,495.0 1075.3,501.5 1075.3,514.5 1064.0,521.0 1052.7,514.5 1052.7,501.5" fill="#ffffff" stroke="#acb2bd" stroke-width="1.25"/>
+<polygon points="1152.0,495.0 1163.3,501.5 1163.3,514.5 1152.0,521.0 1140.7,514.5 1140.7,501.5" fill="#ffffff" stroke="#adb3bd" stroke-width="1.25"/>
+<polygon points="118.0,533.0 129.3,539.5 129.3,552.5 118.0,559.0 106.7,552.5 106.7,539.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="162.0,533.0 173.3,539.5 173.3,552.5 162.0,559.0 150.7,552.5 150.7,539.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="206.0,533.0 217.3,539.5 217.3,552.5 206.0,559.0 194.7,552.5 194.7,539.5" fill="#ffffff" stroke="#e4e5e8" stroke-width="1.25"/>
+<polygon points="250.0,533.0 261.3,539.5 261.3,552.5 250.0,559.0 238.7,552.5 238.7,539.5" fill="#ffffff" stroke="#e2e3e7" stroke-width="1.25"/>
+<polygon points="294.0,533.0 305.3,539.5 305.3,552.5 294.0,559.0 282.7,552.5 282.7,539.5" fill="#ffffff" stroke="#e0e1e5" stroke-width="1.25"/>
+<polygon points="338.0,533.0 349.3,539.5 349.3,552.5 338.0,559.0 326.7,552.5 326.7,539.5" fill="#ffffff" stroke="#dedfe3" stroke-width="1.25"/>
+<polygon points="382.0,533.0 393.3,539.5 393.3,552.5 382.0,559.0 370.7,552.5 370.7,539.5" fill="#ffffff" stroke="#dbdde1" stroke-width="1.25"/>
+<polygon points="426.0,533.0 437.3,539.5 437.3,552.5 426.0,559.0 414.7,552.5 414.7,539.5" fill="#ffffff" stroke="#d8dadf" stroke-width="1.25"/>
+<polygon points="470.0,533.0 481.3,539.5 481.3,552.5 470.0,559.0 458.7,552.5 458.7,539.5" fill="#ffffff" stroke="#d5d7dc" stroke-width="1.25"/>
+<polygon points="514.0,533.0 525.3,539.5 525.3,552.5 514.0,559.0 502.7,552.5 502.7,539.5" fill="#ffffff" stroke="#d2d4da" stroke-width="1.25"/>
+<polygon points="558.0,533.0 569.3,539.5 569.3,552.5 558.0,559.0 546.7,552.5 546.7,539.5" fill="#ffffff" stroke="#ced1d7" stroke-width="1.25"/>
+<polygon points="602.0,533.0 613.3,539.5 613.3,552.5 602.0,559.0 590.7,552.5 590.7,539.5" fill="#ffffff" stroke="#cbced5" stroke-width="1.25"/>
+<polygon points="646.0,533.0 657.3,539.5 657.3,552.5 646.0,559.0 634.7,552.5 634.7,539.5" fill="#ffffff" stroke="#c8cbd2" stroke-width="1.25"/>
+<polygon points="690.0,533.0 701.3,539.5 701.3,552.5 690.0,559.0 678.7,552.5 678.7,539.5" fill="#ffffff" stroke="#c5c8d0" stroke-width="1.25"/>
+<polygon points="734.0,533.0 745.3,539.5 745.3,552.5 734.0,559.0 722.7,552.5 722.7,539.5" fill="#ffffff" stroke="#c2c6cd" stroke-width="1.25"/>
+<polygon points="778.0,533.0 789.3,539.5 789.3,552.5 778.0,559.0 766.7,552.5 766.7,539.5" fill="#ffffff" stroke="#bfc3cb" stroke-width="1.25"/>
+<polygon points="822.0,533.0 833.3,539.5 833.3,552.5 822.0,559.0 810.7,552.5 810.7,539.5" fill="#ffffff" stroke="#bcc0c9" stroke-width="1.25"/>
+<polygon points="866.0,533.0 877.3,539.5 877.3,552.5 866.0,559.0 854.7,552.5 854.7,539.5" fill="#ffffff" stroke="#babec7" stroke-width="1.25"/>
+<polygon points="910.0,533.0 921.3,539.5 921.3,552.5 910.0,559.0 898.7,552.5 898.7,539.5" fill="#ffffff" stroke="#b8bcc6" stroke-width="1.25"/>
+<polygon points="954.0,533.0 965.3,539.5 965.3,552.5 954.0,559.0 942.7,552.5 942.7,539.5" fill="#ffffff" stroke="#b6bbc4" stroke-width="1.25"/>
+<polygon points="998.0,533.0 1009.3,539.5 1009.3,552.5 998.0,559.0 986.7,552.5 986.7,539.5" fill="#ffffff" stroke="#b5bac3" stroke-width="1.25"/>
+<polygon points="1042.0,533.0 1053.3,539.5 1053.3,552.5 1042.0,559.0 1030.7,552.5 1030.7,539.5" fill="#ffffff" stroke="#b4b9c3" stroke-width="1.25"/>
+<polygon points="1086.0,533.0 1097.3,539.5 1097.3,552.5 1086.0,559.0 1074.7,552.5 1074.7,539.5" fill="#ffffff" stroke="#b4b9c3" stroke-width="1.25"/>
+<polygon points="1130.0,533.0 1141.3,539.5 1141.3,552.5 1130.0,559.0 1118.7,552.5 1118.7,539.5" fill="#ffffff" stroke="#b4b9c3" stroke-width="1.25"/>
+<polygon points="1174.0,533.0 1185.3,539.5 1185.3,552.5 1174.0,559.0 1162.7,552.5 1162.7,539.5" fill="#ffffff" stroke="#b5bac4" stroke-width="1.25"/>
+<polygon points="1020.0,419.0 1031.3,425.5 1031.3,438.5 1020.0,445.0 1008.7,438.5 1008.7,425.5" fill="#ffffff" stroke="#7f62d4" stroke-width="1.75"/>
+<polygon points="1108.0,495.0 1119.3,501.5 1119.3,514.5 1108.0,521.0 1096.7,514.5 1096.7,501.5" fill="#ffffff" stroke="#7f62d4" stroke-width="1.75"/>
+<polygon points="1174.0,457.0 1185.3,463.5 1185.3,476.5 1174.0,483.0 1162.7,476.5 1162.7,463.5" fill="#ffffff" stroke="#7f62d4" stroke-width="1.75"/>
+<polygon points="866.0,453.0 880.7,461.5 880.7,478.5 866.0,487.0 851.3,478.5 851.3,461.5" fill="none" stroke="#c94f27" stroke-width="1" opacity="0.5"/>
+<polygon points="866.0,457.0 877.3,463.5 877.3,476.5 866.0,483.0 854.7,476.5 854.7,463.5" fill="#fbe3d9" stroke="#c94f27" stroke-width="2"/>
+<circle cx="1080" cy="262" r="80" fill="none" stroke="#ddd7f0" stroke-width="1.5"/>
+<circle cx="1080" cy="262" r="54" fill="none" stroke="#a99ad9" stroke-width="1.5"/>
+<circle cx="1080" cy="262" r="26" fill="#7f62d4"/>
+<rect x="938" y="104" width="262" height="46" rx="23" fill="#ffffff" stroke="#cfd2d8" stroke-width="1.25"/>
+<path d="M1058 149 L1074 149 L1062 164 Z" fill="#ffffff" stroke="#cfd2d8" stroke-width="1.25" stroke-linejoin="round"/>
+<rect x="1057" y="147" width="18" height="3" fill="#ffffff"/>
+<circle cx="962" cy="127.0" r="5" fill="#c94f27"/>
+<text x="978" y="132.5" fill="#1a1d24" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">payments-api OOMKilled</text>
+<text x="80" y="118" fill="#6b4fc4" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="2.5">HANDS-ON WORKSHOP</text>
+<text x="80" y="190" fill="#1a1d24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" letter-spacing="-1">Build your own</text>
+<text x="80" y="256" fill="#1a1d24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" letter-spacing="-1">autonomous SRE <tspan fill="#6b4fc4">in minutes</tspan></text>
+<text x="80" y="310" fill="#5a6270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22">K8sGPT, Prometheus and Grafana on a local kind cluster</text>
+<text x="80" y="604" fill="#8a93a3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">github.com/data-agent-co/autonomous-sre-training</text>
+<text x="1200" y="604" fill="#5a6270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" text-anchor="end">Powered by <tspan fill="#1a1d24" font-weight="600">DataAgent</tspan></text>
+</svg>

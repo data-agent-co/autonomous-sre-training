@@ -1,3 +1,10 @@
+<a href="https://data-agent.co">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <img alt="Build your own autonomous SRE in minutes. A hands-on workshop with K8sGPT, Prometheus and Grafana on a local kind cluster. Powered by DataAgent." src="docs/assets/hero-light.svg" width="100%">
+  </picture>
+</a>
+
 # autonomous-sre-training
 
 Code for a hands-on autonomous SRE workshop. One script builds a local
