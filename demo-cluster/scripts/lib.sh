@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Shared helpers for the demo-cluster scripts. Source it, don't run it.
 #
-# Every script acts on one kind cluster only: CLUSTER_NAME (default
-# demo-cluster). kubectl and helm calls go through demo_kubectl and
-# demo_helm, which pin them to the kind-$CLUSTER_NAME context, so your
-# current kubectl context never matters.
+# Every script acts on one cluster only: CLUSTER_NAME (default
+# demo-cluster), run by CLUSTER_PROVIDER (kind or k3d). kubectl and helm
+# calls go through demo_kubectl and demo_helm, which pin them to the
+# $CLUSTER_PROVIDER-$CLUSTER_NAME context, so your current kubectl context
+# never matters.
 #
-#   CLUSTER_NAME=demo-cluster  kind cluster to act on. Set it to run a
-#                              second demo cluster next to the first.
+#   CLUSTER_NAME=demo-cluster  cluster to act on. Set it to run a second
+#                              demo cluster next to the first.
+#   CLUSTER_PROVIDER=kind      kind or k3d: the tool that runs the cluster
+#                              and names its context.
 
 # The scripts that source this file read the variables it sets.
 # shellcheck disable=SC2034

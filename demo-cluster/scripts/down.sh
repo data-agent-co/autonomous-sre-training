@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Tear down everything up.sh and the trigger scripts start: the Grafana
-# port-forward, a running OOMKill loop (trigger-oomkill.sh), and the kind
+# port-forward, a running OOMKill loop (trigger-oomkill.sh), and the
 # cluster itself.
 #
-# Deletes only the kind cluster named $CLUSTER_NAME (default demo-cluster),
-# through kind, so it cannot touch any other cluster in your kubeconfig.
+# Deletes only the $CLUSTER_PROVIDER (kind or k3d) cluster named
+# $CLUSTER_NAME (default demo-cluster), through that tool, so it cannot
+# touch any other cluster in your kubeconfig. It does delete a cluster of
+# that name you created yourself, so point CLUSTER_NAME only at a cluster
+# that may go.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

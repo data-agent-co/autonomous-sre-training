@@ -63,11 +63,12 @@ target).
 The first run takes about 5–10 minutes (image pulls and builds). `up.sh` is
 idempotent: run it again after changing `.env`, or when a step failed.
 
-The scripts only ever act on the kind cluster `demo-cluster`, through the
-context `kind-demo-cluster`, and check that this context points at that kind
-cluster before they change anything. One side effect comes from kind itself:
-creating the cluster switches your current kubectl context to
-`kind-demo-cluster`. The commands below name the context explicitly anyway.
+The scripts only ever act on the cluster `demo-cluster`, through the
+context `kind-demo-cluster` (`k3d-demo-cluster` on k3d), and check that this
+context points at that cluster before they change anything. One side effect
+comes from the cluster tool itself: creating the cluster switches your
+current kubectl context to that one. The commands below name the context
+explicitly anyway.
 
 **Trigger an OOMKill** in the `payments-api` app:
 
@@ -140,13 +141,13 @@ Run these from `demo-cluster/`:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster and returns it to its just-installed state: stops the faults, replaces the sample app pods, wipes Prometheus data, deletes all Results. |
 | `./scripts/reset.sh` | Deletes the cluster and builds it again (`down.sh`, then `up.sh`). |
-| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the kind cluster. |
+| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the cluster (kind or k3d). |
 
 From the repository root, `make down` runs `down.sh`.
 
-`down.sh` deletes only the kind cluster `demo-cluster`, through `kind delete
-cluster`. kind also removes its context, so switch back to your usual one
-afterwards (`kubectl config use-context <name>`).
+`down.sh` deletes only the cluster `demo-cluster`, through `kind delete
+cluster` (or `k3d cluster delete`). The tool also removes its context, so
+switch back to your usual one afterwards (`kubectl config use-context <name>`).
 
 ## Repo layout
 

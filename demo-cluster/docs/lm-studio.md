@@ -43,7 +43,8 @@ in the Discover tab and download it.
 ## 3. Load the model and start the server
 
 The server must listen on the network. The kind node reaches your laptop through
-`host.docker.internal`, so the default `127.0.0.1` binding is refused.
+`host.docker.internal` (a k3d node through `host.k3d.internal`), so the default
+`127.0.0.1` binding is refused.
 
 ```bash
 lms load gemma-3-1b-it -y
@@ -81,6 +82,9 @@ K8SGPT_LOCAL=true
 K8SGPT_MODEL=gemma-3-1b-it
 K8SGPT_BASE_URL=http://host.docker.internal:1234/v1
 ```
+
+On a k3d cluster (`CLUSTER_PROVIDER=k3d`) use
+`K8SGPT_BASE_URL=http://host.k3d.internal:1234/v1` instead.
 
 No key is needed: leave `LLM_API_KEY` empty. With `K8SGPT_LOCAL=true` the
 backend is always `openai`.
