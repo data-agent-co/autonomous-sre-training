@@ -1,6 +1,6 @@
 # demo-cluster
 
-The workshop cluster: a local kind cluster with three sample apps, a load
+The workshop cluster: a local kind (or k3d) cluster with three sample apps, a load
 generator, Prometheus and Grafana, the K8sGPT operator and the watcher. You
 trigger real faults and compare what the dashboard, K8sGPT and the watcher
 each see.
@@ -14,7 +14,7 @@ Run every command from this directory (`demo-cluster/`).
 ```
 Your laptop (Docker)
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ kind cluster "demo-cluster" (one control-plane node, Kubernetes v1.37)       │
+│ kind or k3d cluster "demo-cluster" (one node)                                │
 │                                                                              │
 │ namespace demo-apps                                                          │
 │   payments-api     Go       limit 128Mi   OOMKill victim                     │
@@ -132,31 +132,35 @@ With `CLUSTER_PROVIDER=k3d`, the scripts act on the
 `k3d-$CLUSTER_NAME`, with the same safety check as for kind. You need k3d
 instead of kind; tested with k3d v5.9.0 (k3s v1.35.5).
 
-- `up.sh` reuses the cluster if it exists, or creates it with one server and
-  two agents. `KIND_NODE_IMAGE` is ignored.
+- `up.sh` reuses the cluster if it exists, or creates it with a single node,
+  as with kind. `KIND_NODE_IMAGE` is ignored.
 - Local images are loaded with `k3d image import`.
 - k3s ships its own metrics-server, so `up.sh` waits for it instead of
   installing the upstream one.
 - `down.sh` and `reset.sh` delete the cluster with `k3d cluster delete`.
+- With `K8SGPT_LOCAL=true`, set `K8SGPT_BASE_URL=http://host.k3d.internal:11434/v1`
+  in `.env`: that is the name k3d gives your machine inside its nodes.
 
-Use the same prefix for every script, for example with an existing k3d
-cluster `dev`:
+Use the same prefix for every script. `up.sh` reuses a k3d cluster of that
+name if one exists, and `down.sh` and `reset.sh` delete it, so give the demo
+its own name rather than pointing `CLUSTER_NAME` at a cluster you want to
+keep:
 
 ```bash
-CLUSTER_PROVIDER=k3d CLUSTER_NAME=dev ./scripts/up.sh
-CLUSTER_PROVIDER=k3d CLUSTER_NAME=dev ./scripts/trigger-oomkill.sh
-kubectl --context k3d-dev -n k8sgpt-system get results
+CLUSTER_PROVIDER=k3d ./scripts/up.sh
+CLUSTER_PROVIDER=k3d ./scripts/trigger-oomkill.sh
+kubectl --context k3d-demo-cluster -n k8sgpt-system get results
 ```
 
 ### What up.sh does
 
 It runs these steps in order, each with its own log file:
 
-1. **kind cluster**: creates `demo-cluster` (or reuses it).
+1. **kind cluster** (or **k3d cluster**): creates `demo-cluster` (or reuses it).
 2. **namespaces**: `demo-apps`, `monitoring`, `k8sgpt-system`.
 3. **metrics-server**, for `kubectl top`.
 4. **build + load sample images**: `payments-api:demo` and `recommend-svc:demo`,
-   built locally and loaded into the kind node.
+   built locally and loaded into the cluster's node.
 5. **deploy sample apps + loadgen**.
 6. **kube-prometheus-stack** (Prometheus, Grafana, Alertmanager,
    kube-state-metrics, node-exporter).
@@ -169,7 +173,7 @@ It runs these steps in order, each with its own log file:
     [`manifests/k8sgpt/k8sgpt-cr.yaml`](manifests/k8sgpt/k8sgpt-cr.yaml) from
     your settings, applies it, and restarts the operator.
 12. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
-    into the kind node and installs the `k8s-watcher` release in
+    into the cluster's node and installs the `k8s-watcher` release in
     `k8sgpt-system` with [`helm/watcher-values.yaml`](helm/watcher-values.yaml).
 13. **pod smoke-test**: fails if a pod in the three namespaces is stuck
     (ImagePullBackOff, CrashLoopBackOff, long Pending).
@@ -187,12 +191,13 @@ commands to verify, trigger faults, read Results, open Grafana and tear down.
 
 ### Your kubectl context
 
-Every script acts only on the kind cluster `$CLUSTER_NAME`: kubectl and helm
-calls name the context `kind-$CLUSTER_NAME`, and before changing anything the
-scripts check that the kind cluster exists and that this context points at
-it. Your current context is never used. One thing comes from kind itself:
-`kind create cluster` (the first `up.sh` run) switches your current context to
-`kind-demo-cluster`.
+Every script acts only on the cluster `$CLUSTER_NAME`: kubectl and helm
+calls name the context `<provider>-$CLUSTER_NAME` (`kind-demo-cluster` by
+default, `k3d-demo-cluster` with [k3d](#using-k3d-instead-of-kind)), and
+before changing anything the scripts check that the cluster exists and that
+this context points at it. Your current context is never used. One thing
+comes from the cluster tool itself: creating the cluster (the first `up.sh`
+run) switches your current context to that one.
 
 The commands on this page name the context too. For a shorter version:
 
@@ -433,8 +438,9 @@ ollama pull gpt-oss:20b                    # in another terminal; a one-time dow
 ```
 
 `OLLAMA_HOST=0.0.0.0` makes Ollama listen on your network, so the kind node can
-reach it through `host.docker.internal`. Stop it when you are done, or use a
-firewall, if you are on a shared network.
+reach it through `host.docker.internal` (a k3d node through
+`host.k3d.internal`; set `K8SGPT_BASE_URL` to match). Stop it when you are
+done, or use a firewall, if you are on a shared network.
 
 Then set `K8SGPT_LOCAL=true` in `.env` and re-run `./scripts/up.sh`. No key is
 needed. For another model or port, also set `K8SGPT_MODEL` and
@@ -450,11 +456,13 @@ the Docker bridge address instead:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster. Stops the slow leak and the OOMKill loop, replaces the payments-api and recommend-svc pods, restarts Prometheus (wipes its data, so graphs start flat), restarts slack-relay (if Slack is on) and the watcher, then deletes all Results and leftover helm-test pods. |
 | `./scripts/reset.sh` | `down.sh`, then `up.sh`. Slower, but starts from scratch. |
-| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the kind cluster. |
+| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the cluster. |
 
 `down.sh` deletes the cluster through `kind delete cluster --name
-$CLUSTER_NAME`, so it cannot touch another cluster. kind also removes the
-`kind-demo-cluster` context; switch back to your usual one afterwards.
+$CLUSTER_NAME` (or `k3d cluster delete $CLUSTER_NAME`), so it cannot touch
+another cluster. It does delete a cluster of that name you created yourself.
+The tool also removes the cluster's context; switch back to your usual one
+afterwards.
 
 ## Scripts
 
@@ -463,7 +471,7 @@ All scripts are in [`scripts/`](scripts) and work from any directory.
 | Script | What it does |
 |---|---|
 | `up.sh` | Creates or updates the whole demo. Idempotent. A re-run stops the OOMKill loop and replaces any crash-looping app pod. |
-| `down.sh` | Stops the background helpers, deletes the kind cluster. |
+| `down.sh` | Stops the background helpers, deletes the cluster. |
 | `reset.sh` | `down.sh` + `up.sh`. |
 | `soft-reset.sh` | Returns the cluster to its just-installed state (see above). |
 | `grafana.sh [--stop]` | Starts or stops the Grafana port-forward. Refuses a port that is already in use. |
@@ -506,9 +514,9 @@ The chart and image versions are set at the top of
 | `soft-reset.sh` ends with `done with errors` | One or more steps failed | It lists each failed step with its log (`.run/<cluster>/soft-reset-<timestamp>/`) and last lines. Fix the cause and re-run it, or use `./scripts/reset.sh`. |
 | `missing tools: ...` or `Docker is not running.` | A prerequisite is missing | Install it or start Docker. |
 | `kind create cluster` fails or the node never gets Ready | Too little memory for Docker, or kind is older than v0.33.0 | Give Docker at least 6 GB. Upgrade kind, or run `KIND_NODE_IMAGE= ./scripts/up.sh`. |
-| `kind cluster 'demo-cluster' not found` | The cluster was deleted | `./scripts/up.sh` |
-| `context 'kind-demo-cluster' points at ...` or `your kubeconfig has no 'kind-demo-cluster' context` | Your kubeconfig lost or changed the kind entry | `kind export kubeconfig --name demo-cluster` |
-| ImagePullBackOff on payments-api, recommend-svc or k8s-watcher | The image was not loaded into the kind node | `./scripts/up.sh` |
+| `kind cluster 'demo-cluster' not found` (or `k3d cluster ...`) | The cluster was deleted | `./scripts/up.sh` |
+| `context 'kind-demo-cluster' points at ...` or `your kubeconfig has no 'kind-demo-cluster' context` | Your kubeconfig lost or changed the cluster's entry | `kind export kubeconfig --name demo-cluster`, or on k3d `k3d kubeconfig merge demo-cluster --kubeconfig-merge-default` |
+| ImagePullBackOff on payments-api, recommend-svc or k8s-watcher | The image was not loaded into the cluster's node | `./scripts/up.sh` |
 | `port 3000 is already in use` | Something else listens on 3000 | `GRAFANA_PORT=3001 ./scripts/grafana.sh` |
 | Grafana stopped answering | The port-forward died with its pod, the cluster or Docker | `./scripts/grafana.sh` |
 | No Result a few minutes after `trigger-oomkill.sh` | K8sGPT has not caught the pod failing yet, or the operator has an error | Check `kubectl --context kind-demo-cluster -n demo-apps get pods` and the operator log: `kubectl --context kind-demo-cluster -n k8sgpt-system logs deploy/k8sgpt-operator-controller-manager` |

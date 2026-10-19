@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Bring up the demo cluster end to end: a kind cluster with the sample apps,
-# kube-prometheus-stack (Prometheus + Grafana), the K8sGPT operator and the
-# watcher. Idempotent: safe to re-run against an existing cluster.
+# Bring up the demo cluster end to end: a kind (or k3d) cluster with the
+# sample apps, kube-prometheus-stack (Prometheus + Grafana), the K8sGPT
+# operator and the watcher. Idempotent: safe to re-run against an existing
+# cluster.
 #
 # Settings come from demo-cluster/.env, which is optional (see .env.example):
 # without an LLM key K8sGPT runs without AI explanations, and without a
 # Slack webhook its Results stay in the cluster.
 #
 # Environment:
-#   CLUSTER_NAME=demo-cluster  kind cluster to create or reuse
+#   CLUSTER_NAME=demo-cluster  cluster to create or reuse
+#   CLUSTER_PROVIDER=kind      kind or k3d: the tool that runs the cluster
 #   GRAFANA_PORT=3000          local port for the Grafana port-forward
 #   ENV_FILE=demo-cluster/.env settings file to load
-#   KIND_NODE_IMAGE=...        node image for a new cluster (empty = kind's default)
+#   KIND_NODE_IMAGE=...        node image for a new kind cluster (empty = kind's
+#                              default); ignored with k3d
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,8 +66,9 @@ if [[ "$K8SGPT_LOCAL" == "true" ]]; then
   llm_host="${K8SGPT_BASE_URL#*://}"
   llm_host="${llm_host%%[:/]*}"
   case "$llm_host" in
-    host.docker.internal|localhost|127.*|10.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|192.168.*) ;;
-    *) die "K8SGPT_LOCAL=true, but K8SGPT_BASE_URL=$K8SGPT_BASE_URL is not a local address. Empty K8SGPT_BASE_URL and K8SGPT_MODEL in .env for the Ollama defaults, or set K8SGPT_LOCAL=false." ;;
+    # host.k3d.internal is the name k3d gives your machine inside its nodes.
+    host.docker.internal|host.k3d.internal|localhost|127.*|10.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|192.168.*) ;;
+    *) die "K8SGPT_LOCAL=true, but K8SGPT_BASE_URL=$K8SGPT_BASE_URL is not a local address. Empty K8SGPT_BASE_URL and K8SGPT_MODEL in .env for the Ollama defaults (on k3d, set K8SGPT_BASE_URL=http://host.k3d.internal:11434/v1), or set K8SGPT_LOCAL=false." ;;
   esac
   AI_SUMMARY="on: $K8SGPT_MODEL at $K8SGPT_BASE_URL"
 elif [[ -n "$LLM_API_KEY" ]]; then
@@ -192,7 +196,10 @@ do_cluster() {
   if cluster_exists; then
     echo "$CLUSTER_PROVIDER cluster '$CLUSTER_NAME' already exists, reusing it"
   elif [[ "$CLUSTER_PROVIDER" == "k3d" ]]; then
-    k3d cluster create "$CLUSTER_NAME" --servers 1 --agents 2 --wait --timeout 120s
+    # One node, as with kind (kind-config.yaml): the demo's memory budget and
+    # the README's cluster diagram assume a single node. The k3s server
+    # schedules workloads itself, so no agent is needed.
+    k3d cluster create "$CLUSTER_NAME" --servers 1 --agents 0 --wait --timeout 120s
   elif [[ -n "$KIND_NODE_IMAGE" ]]; then
     kind create cluster --name "$CLUSTER_NAME" --config kind-config.yaml \
       --image "$KIND_NODE_IMAGE" --wait 120s

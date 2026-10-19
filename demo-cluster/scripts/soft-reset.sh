@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Soft reset: return the demo cluster to its just-installed state without
-# deleting it. Idempotent, safe to re-run. Acts only on the kind cluster
-# named $CLUSTER_NAME (default demo-cluster).
+# deleting it. Idempotent, safe to re-run. Acts only on the $CLUSTER_PROVIDER
+# (kind or k3d) cluster named $CLUSTER_NAME (default demo-cluster).
 #
 # What it does:
 #   1. Stop the slow leak and the OOMKill loop
@@ -12,8 +12,8 @@
 #   5. Restart the watcher, so it forgets what it reported
 #   6. Delete all K8sGPT Results and leftover watcher helm-test pods
 #
-# For a full teardown and reinstall use reset.sh (kind delete + up.sh,
-# much slower).
+# For a full teardown and reinstall use reset.sh (down.sh + up.sh, much
+# slower).
 set -uo pipefail  # no -e; a failed step is reported at the end, not fatal
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
