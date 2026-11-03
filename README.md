@@ -1,7 +1,7 @@
 <a href="https://data-agent.co">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <img alt="Build your own autonomous SRE in minutes. A hands-on workshop with K8sGPT, Prometheus and Grafana on a local kind cluster. Powered by DataAgent." src="docs/assets/hero-light.svg" width="100%">
+    <img alt="Build your own autonomous SRE in minutes. A hands-on workshop with K8sGPT, Prometheus and Perses on a local kind cluster. Powered by DataAgent." src="docs/assets/hero-light.svg" width="100%">
   </picture>
 </a>
 
@@ -9,7 +9,7 @@
 
 Code for a hands-on autonomous SRE workshop. One script builds a local
 [kind](https://kind.sigs.k8s.io) cluster with three small sample apps,
-Prometheus and Grafana, the [K8sGPT](https://k8sgpt.ai) operator, and a small
+Prometheus and [Perses](https://perses.dev), the [K8sGPT](https://k8sgpt.ai) operator, and a small
 watcher that writes K8sGPT Results. You then break an app on purpose (an
 OOMKill, a slow memory leak, a ConfigMap change) and compare what each layer
 catches: the golden-signal dashboard, K8sGPT's analysis (optionally explained
@@ -87,9 +87,9 @@ kubectl --context kind-demo-cluster -n k8sgpt-system get results -o yaml
 Without an LLM, each Result names the problem (`spec.error`); with one,
 `spec.details` also holds the LLM's explanation.
 
-**Open Grafana.** `up.sh` port-forwards it in the background:
-<http://localhost:3000/d/demo-cluster-overview> (admin / admin, or browse
-anonymously). If the port-forward stopped, run `./scripts/grafana.sh`.
+**Open Perses.** `up.sh` port-forwards it in the background:
+<http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview>
+(no login). If the port-forward stopped, run `./scripts/perses.sh`.
 
 **Stop the fault:**
 
@@ -141,7 +141,7 @@ Run these from `demo-cluster/`:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster and returns it to its just-installed state: stops the faults, replaces the sample app pods, wipes Prometheus data, deletes all Results. |
 | `./scripts/reset.sh` | Deletes the cluster and builds it again (`down.sh`, then `up.sh`). |
-| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the cluster (kind or k3d). |
+| `./scripts/down.sh` | Stops the Perses port-forward and the OOMKill loop, then deletes the cluster (kind or k3d). |
 
 From the repository root, `make down` runs `down.sh`.
 
@@ -156,8 +156,8 @@ switch back to your usual one afterwards (`kubectl config use-context <name>`).
 ├── demo-cluster/         the workshop cluster: start here
 │   ├── scripts/          up, down, reset, fault triggers, helpers
 │   ├── manifests/        sample apps, load generator, K8sGPT resource, Slack relay and probe
-│   ├── helm/             values for kube-prometheus-stack, the K8sGPT operator and the watcher
-│   ├── grafana/          the dashboard (JSON)
+│   ├── helm/             values for kube-prometheus-stack, Perses, the K8sGPT operator and the watcher
+│   ├── perses/           the dashboard, its project and datasource (Perses resources)
 │   ├── docs/             running K8sGPT with LM Studio
 │   └── .env.example      optional settings (LLM, Slack)
 ├── k8s-watcher/              Go source of the watcher
@@ -192,7 +192,7 @@ make ci         # every CI check; none needs a cluster
 - **kind fails to start the node.** The pinned node image needs kind v0.33.0
   or later. Upgrade kind, or run with `KIND_NODE_IMAGE= ./scripts/up.sh` to use
   your kind version's default image.
-- **Port 3000 is busy.** `GRAFANA_PORT=3001 ./scripts/grafana.sh`.
+- **Port 8080 is busy.** `PERSES_PORT=8081 ./scripts/perses.sh`.
 - **No AI text in the Results.** Check the key and model in `.env`, then
   re-run `./scripts/up.sh`; it also restarts the operator, which stops
   calling the LLM after repeated failures. See

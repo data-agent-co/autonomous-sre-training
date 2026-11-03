@@ -8,7 +8,7 @@ GitHub team. It is licensed under the Apache License 2.0 (see
 
 Data Agent Inc. also builds a commercial product, an autonomous observability
 and remediation platform that works alongside the tools used here (K8sGPT,
-Prometheus, Grafana) rather than replacing them.
+Prometheus, Perses) rather than replacing them.
 
 This is educational workshop code with no support (see the
 [Disclaimer](README.md#disclaimer)). Bug reports are welcome as GitHub issues,

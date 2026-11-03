@@ -1,6 +1,6 @@
 # Workshop: From a slow leak to a K8sGPT alert in Slack
 
-In this lab you make recommend-svc leak memory with `trigger-leak.sh` and wait for the alert in Slack. K8sGPT stays silent while memory climbs and posts its diagnosis only after the leak ends in an OOMKill. Grafana is only the view on the side, and the one place the leak shows early.
+In this lab you make recommend-svc leak memory with `trigger-leak.sh` and wait for the alert in Slack. K8sGPT stays silent while memory climbs and posts its diagnosis only after the leak ends in an OOMKill. Perses is only the view on the side, and the one place the leak shows early.
 
 ## Before you start
 
@@ -13,11 +13,11 @@ You need the demo cluster running with Slack and an LLM turned on. Run every com
 - [ ] Start clean, so an earlier fault doesn't mix in: `./scripts/soft-reset.sh`. It also stops a running OOMKill loop
 - [ ] All demo pods are healthy: `./scripts/check-pods.sh demo-apps` prints `all pods healthy in demo-apps`
 
-## Step 1: Open Slack (and Grafana, if you like)
+## Step 1: Open Slack (and Perses, if you like)
 
 Open `#incidents-demo` and scroll to the bottom. Everything after your `check-slack.sh` test post comes from this lab.
 
-Optional: open Grafana at <http://localhost:3000/d/demo-cluster-overview> (login `admin` / `admin`) next to it. In this lab Grafana is worth a look: it is the only place the leak shows before it breaks anything.
+Optional: open the Perses dashboard at <http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview> (no login) next to it. In this lab Perses is worth a look: it is the only place the leak shows before it breaks anything.
 
 ## Step 2: Start the leak
 
@@ -89,9 +89,9 @@ kubectl --context kind-demo-cluster -n k8sgpt-system get results \
 
 **Check yourself:** the K8sGPT post names `container=leak-fixture`, not `recommend-svc`. The service container never fails; only the sidecar does.
 
-## Step 5 (optional): See the leak early in Grafana
+## Step 5 (optional): See the leak early in Perses
 
-Grafana is the answer to the question in Step 3: it shows the leak before any alert. These panels move during the quiet phase:
+Perses is the answer to the question in Step 3: it shows the leak before any alert. These panels move during the quiet phase:
 
 | Panel | What you see | When, with `trigger-leak.sh` | When, with `trigger-slowleak.sh` |
 | --- | --- | --- | --- |
@@ -115,7 +115,7 @@ It prints `==> leak-fixture disabled` and rolls out a new recommend-svc pod at b
 
 To also clear the graphs and K8sGPT's Results, run `./scripts/soft-reset.sh` instead.
 
-You are done when no new posts arrive in `#incidents-demo` and Grafana's top row is green again.
+You are done when no new posts arrive in `#incidents-demo` and the dashboard's top row is green again.
 
 ## Troubleshooting
 

@@ -1,7 +1,7 @@
 # demo-cluster
 
 The workshop cluster: a local kind (or k3d) cluster with three sample apps, a load
-generator, Prometheus and Grafana, the K8sGPT operator and the watcher. You
+generator, Prometheus and Perses, the K8sGPT operator and the watcher. You
 trigger real faults and compare what the dashboard, K8sGPT and the watcher
 each see.
 
@@ -35,15 +35,16 @@ Your laptop (Docker)
 │                                                                              │
 │ namespace monitoring                                                         │
 │   kube-prometheus-stack: Prometheus (5s scrape, 6h retention),               │
-│   Grafana, Alertmanager, kube-state-metrics, node-exporter                   │
+│   Alertmanager, kube-state-metrics, node-exporter                            │
+│   Perses (dashboards)                                                        │
 │                                                                              │
 │ namespace kube-system                                                        │
 │   metrics-server (kubectl top, leak-progress.sh)                             │
 └──────────────────────────────────────────────────────────────────────────────┘
       │ kubectl port-forward     │ HTTPS, optional            │ HTTPS, optional
       ▼                          ▼                            ▼
-  localhost:3000             LLM API (OpenAI-compatible,    Slack incoming
-  Grafana                    or a model on your laptop)     webhook
+  localhost:8080             LLM API (OpenAI-compatible,    Slack incoming
+  Perses                     or a model on your laptop)     webhook
 ```
 
 - **payments-api** (Go) serves `/healthz`, `/metrics` and `/allocate`, which
@@ -113,15 +114,15 @@ These are read from your shell, not from `.env`:
 |---|---|---|
 | `CLUSTER_NAME` | `demo-cluster` | The cluster every script acts on, through the context `<provider>-<name>`. |
 | `CLUSTER_PROVIDER` | `kind` | `kind` or `k3d`. See [Using k3d instead of kind](#using-k3d-instead-of-kind). |
-| `GRAFANA_PORT` | `3000` | Local port for the Grafana port-forward. |
+| `PERSES_PORT` | `8080` | Local port for the Perses port-forward. |
 | `ENV_FILE` | `demo-cluster/.env` | Settings file. A missing default file is fine; a missing file you named is an error. A relative path is relative to your current directory. |
 | `KIND_NODE_IMAGE` | the pinned `kindest/node:v1.37.0` | Node image for a new cluster. Set it empty to use your kind version's default. |
 
 To run a second demo cluster next to the first, give it its own name and
-Grafana port, and use the same prefix for every script you run against it:
+Perses port, and use the same prefix for every script you run against it:
 
 ```bash
-CLUSTER_NAME=demo-2 GRAFANA_PORT=3001 ./scripts/up.sh
+CLUSTER_NAME=demo-2 PERSES_PORT=8081 ./scripts/up.sh
 CLUSTER_NAME=demo-2 ./scripts/trigger-oomkill.sh
 ```
 
@@ -162,22 +163,26 @@ It runs these steps in order, each with its own log file:
 4. **build + load sample images**: `payments-api:demo` and `recommend-svc:demo`,
    built locally and loaded into the cluster's node.
 5. **deploy sample apps + loadgen**.
-6. **kube-prometheus-stack** (Prometheus, Grafana, Alertmanager,
-   kube-state-metrics, node-exporter).
+6. **kube-prometheus-stack** (Prometheus, Alertmanager, kube-state-metrics,
+   node-exporter). Its bundled dashboard UI is off.
 7. **ServiceMonitors** for payments-api and recommend-svc.
-8. **Grafana dashboard**, as a ConfigMap the Grafana sidecar loads.
-9. **K8sGPT operator**.
-10. **Slack relay + probe**, or with Slack off, removal of what an earlier run
+8. **Perses**, from the `perses` chart with
+   [`helm/perses-values.yaml`](helm/perses-values.yaml).
+9. **Perses dashboard**: the `.yaml` and `.json` files in [`perses/`](perses),
+   as a ConfigMap the Perses sidecar loads. The step waits until Perses has
+   reloaded the dashboard and fails on a provisioning error.
+10. **K8sGPT operator**.
+11. **Slack relay + probe**, or with Slack off, removal of what an earlier run
     with Slack left behind.
-11. **K8sGPT CR + LLM secret**: renders
+12. **K8sGPT CR + LLM secret**: renders
     [`manifests/k8sgpt/k8sgpt-cr.yaml`](manifests/k8sgpt/k8sgpt-cr.yaml) from
     your settings, applies it, and restarts the operator.
-12. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
+13. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
     into the cluster's node and installs the `k8s-watcher` release in
     `k8sgpt-system` with [`helm/watcher-values.yaml`](helm/watcher-values.yaml).
-13. **pod smoke-test**: fails if a pod in the three namespaces is stuck
+14. **pod smoke-test**: fails if a pod in the three namespaces is stuck
     (ImagePullBackOff, CrashLoopBackOff, long Pending).
-14. **Grafana port-forward**: optional. If it fails, `up.sh` prints `WARN` and
+15. **Perses port-forward**: optional. If it fails, `up.sh` prints `WARN` and
     finishes anyway.
 
 When a required step fails, `up.sh` prints `FAIL`, the log path and the last
@@ -187,7 +192,7 @@ When a required step fails, `up.sh` prints `FAIL`, the log path and the last
 idempotent.
 
 At the end, `up.sh` prints whether AI explanations and Slack are on, and the
-commands to verify, trigger faults, read Results, open Grafana and tear down.
+commands to verify, trigger faults, read Results, open Perses and tear down.
 
 ### Your kubectl context
 
@@ -344,15 +349,15 @@ Clean up the example with
 `kubectl --context kind-demo-cluster -n demo-apps delete configmap payments-config`.
 Unlike K8sGPT, the watcher never deletes its Results; `soft-reset.sh` does.
 
-## Grafana dashboard
+## Perses dashboard
 
-`up.sh` port-forwards Grafana in the background. Open
-<http://localhost:3000/d/demo-cluster-overview> (admin / admin; anonymous users
-can view). The port-forward dies with its pod or cluster (a reset, a Docker
-restart); bring it back with `./scripts/grafana.sh`, stop it with
-`./scripts/grafana.sh --stop`.
+`up.sh` port-forwards [Perses](https://perses.dev) in the background. Open
+<http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview>
+(no login). The port-forward dies with its pod or cluster (a reset, a Docker
+restart); bring it back with `./scripts/perses.sh`, stop it with
+`./scripts/perses.sh --stop`.
 
-The dashboard has 19 panels, refreshes every 5 seconds and shows the last 2
+The dashboard has 23 panels, refreshes every 5 seconds and shows the last 2
 minutes. From top to bottom:
 
 1. **Topology & services**: what runs where, and how to trigger each fault.
@@ -370,12 +375,15 @@ minutes. From top to bottom:
 7. **Memory growth rate**: the slope of each container's memory, the clearest
    signal of a slow leak.
 8. **K8sGPT diagnoses by Kind · LLM calls (errors + latency) · K8sGPT agent
-   health**: whether the detector itself works.
+   health**, then the agent's **Reconciles/s · Avg latency · Errors/s ·
+   Saturation**: whether the detector itself works.
 
-The source is [`grafana/demo-cluster-overview.json`](grafana/demo-cluster-overview.json).
-`up.sh` loads it as the ConfigMap `demo-cluster-overview-dashboard` (label
-`grafana_dashboard=1`) in `monitoring`. Changes made in the Grafana UI are
-lost when Grafana restarts: edit the JSON and re-run `./scripts/up.sh`.
+The source is [`perses/demo-cluster-overview.json`](perses/demo-cluster-overview.json),
+a Perses `Dashboard` in the project `demo-cluster`. Next to it are the
+`Project` and the `prometheus` `GlobalDatasource`. `up.sh` loads all three as
+the ConfigMap `demo-cluster-perses` (label `perses.dev/resource=true`) in
+`monitoring`, and Perses re-reads them every 15 seconds. That also undoes
+changes made in the Perses UI: edit the files and re-run `./scripts/up.sh`.
 
 How the dashboard was built, and the PromQL behind it:
 [../docs/sre-dashboard-best-practices.md](../docs/sre-dashboard-best-practices.md).
@@ -456,7 +464,7 @@ the Docker bridge address instead:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster. Stops the slow leak and the OOMKill loop, replaces the payments-api and recommend-svc pods, restarts Prometheus (wipes its data, so graphs start flat), restarts slack-relay (if Slack is on) and the watcher, then deletes all Results and leftover helm-test pods. |
 | `./scripts/reset.sh` | `down.sh`, then `up.sh`. Slower, but starts from scratch. |
-| `./scripts/down.sh` | Stops the Grafana port-forward and the OOMKill loop, then deletes the cluster. |
+| `./scripts/down.sh` | Stops the Perses port-forward and the OOMKill loop, then deletes the cluster. |
 
 `down.sh` deletes the cluster through `kind delete cluster --name
 $CLUSTER_NAME` (or `k3d cluster delete $CLUSTER_NAME`), so it cannot touch
@@ -474,7 +482,7 @@ All scripts are in [`scripts/`](scripts) and work from any directory.
 | `down.sh` | Stops the background helpers, deletes the cluster. |
 | `reset.sh` | `down.sh` + `up.sh`. |
 | `soft-reset.sh` | Returns the cluster to its just-installed state (see above). |
-| `grafana.sh [--stop]` | Starts or stops the Grafana port-forward. Refuses a port that is already in use. |
+| `perses.sh [--stop]` | Starts or stops the Perses port-forward. Refuses a port that is already in use. |
 | `trigger-oomkill.sh [--stop]` | Starts or stops the OOMKill loop on payments-api. |
 | `trigger-leak.sh [--rate N \| --off]` | Starts the leak at N MB/min (default 280, at least 1), or stops it. |
 | `trigger-slowleak.sh [--rate N \| --off]` | Starts the leak at N MB/min (default 20, at least 1), or stops it. |
@@ -483,7 +491,7 @@ All scripts are in [`scripts/`](scripts) and work from any directory.
 | `check-slack.sh` | Posts a test message to `SLACK_WEBHOOK_URL`. |
 | `lib.sh`, `k8sgpt-lib.sh` | Helpers the other scripts source. |
 
-The Grafana port-forward and the OOMKill loop run in the background. Their PID
+The Perses port-forward and the OOMKill loop run in the background. Their PID
 files and logs are in `.run/<cluster>/` (gitignored). A script stops a process
 only if it is still the one it started.
 
@@ -494,6 +502,7 @@ only if it is still the one it started.
 | kind node image | `kindest/node:v1.37.0`, pinned by digest in `up.sh` (needs kind v0.33.0+) |
 | metrics-server | v0.9.0 |
 | kube-prometheus-stack chart | 91.9.0 (`oci://ghcr.io/prometheus-community/charts`, needs Helm 3.8+) |
+| perses chart | 0.24.0, Perses v0.55.0 (`https://perses.github.io/helm-charts`) |
 | k8sgpt-operator chart | 0.2.29 (`https://charts.k8sgpt.ai`) |
 | K8sGPT | `ghcr.io/k8sgpt-ai/k8sgpt:v0.4.39` |
 | payments-api image | built from `golang:1.27.1-alpine3.24`, runs on `alpine:3.24.2` |
@@ -517,8 +526,9 @@ The chart and image versions are set at the top of
 | `kind cluster 'demo-cluster' not found` (or `k3d cluster ...`) | The cluster was deleted | `./scripts/up.sh` |
 | `context 'kind-demo-cluster' points at ...` or `your kubeconfig has no 'kind-demo-cluster' context` | Your kubeconfig lost or changed the cluster's entry | `kind export kubeconfig --name demo-cluster`, or on k3d `k3d kubeconfig merge demo-cluster --kubeconfig-merge-default` |
 | ImagePullBackOff on payments-api, recommend-svc or k8s-watcher | The image was not loaded into the cluster's node | `./scripts/up.sh` |
-| `port 3000 is already in use` | Something else listens on 3000 | `GRAFANA_PORT=3001 ./scripts/grafana.sh` |
-| Grafana stopped answering | The port-forward died with its pod, the cluster or Docker | `./scripts/grafana.sh` |
+| `port 8080 is already in use` | Something else listens on 8080 | `PERSES_PORT=8081 ./scripts/perses.sh` |
+| Perses stopped answering | The port-forward died with its pod, the cluster or Docker | `./scripts/perses.sh` |
+| The dashboard is missing or out of date | Perses has not re-read the ConfigMap yet, or rejected a file | Wait 15 seconds and reload. Check `kubectl --context kind-demo-cluster -n monitoring logs perses-0 -c perses`. |
 | No Result a few minutes after `trigger-oomkill.sh` | K8sGPT has not caught the pod failing yet, or the operator has an error | Check `kubectl --context kind-demo-cluster -n demo-apps get pods` and the operator log: `kubectl --context kind-demo-cluster -n k8sgpt-system logs deploy/k8sgpt-operator-controller-manager` |
 | Results have no AI text | No `LLM_API_KEY`, a wrong key or model, or the operator stopped calling the LLM after failures | Check `.env` and re-run `./scripts/up.sh`. The `up.sh` header says whether AI explanations are on. |
 | AI text is identical to an earlier answer | K8sGPT cached it | `kubectl --context kind-demo-cluster -n k8sgpt-system patch k8sgpt k8sgpt-sample --type merge -p '{"spec":{"noCache":true}}'`. `up.sh` sets it back. |
@@ -541,7 +551,7 @@ demo-cluster/
 │   ├── k8sgpt/           the K8sGPT resource (a template up.sh renders)
 │   ├── slack-relay/      posts K8sGPT, watcher and Alertmanager findings to Slack
 │   └── slack-probe/      checks that the Slack webhook answers
-├── helm/                 values for kube-prometheus-stack, the K8sGPT operator, the watcher
-├── grafana/              the dashboard JSON
+├── helm/                 values for kube-prometheus-stack, Perses, the K8sGPT operator, the watcher
+├── perses/               the dashboard, its project and datasource
 └── docs/                 running K8sGPT with LM Studio
 ```

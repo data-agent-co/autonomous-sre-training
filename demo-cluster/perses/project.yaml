@@ -1,0 +1,8 @@
+# The Perses project that holds the demo dashboards. Loaded with the other
+# files in this folder; see do_dashboard in scripts/up.sh.
+kind: Project
+metadata:
+  name: demo-cluster
+spec:
+  display:
+    name: Demo cluster

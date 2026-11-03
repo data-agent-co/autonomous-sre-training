@@ -31,8 +31,8 @@ STATE_DIR="$DEMO_DIR/.run/$CLUSTER_NAME"
 # Background helpers: their PID file, and a piece of the command line each
 # one runs with. stop_pidfile kills a PID only when its command line still
 # contains that piece, so it never stops a process of yours.
-GRAFANA_PF_PIDFILE="$STATE_DIR/grafana-pf.pid"
-GRAFANA_PF_MATCH="--context $KUBE_CONTEXT -n monitoring port-forward svc/prometheus-stack-grafana"
+PERSES_PF_PIDFILE="$STATE_DIR/perses-pf.pid"
+PERSES_PF_MATCH="--context $KUBE_CONTEXT -n monitoring port-forward svc/perses"
 OOM_LOOP_PIDFILE="$STATE_DIR/trigger-oomkill.pid"
 OOM_LOOP_MATCH="trigger-oomkill.sh"
 

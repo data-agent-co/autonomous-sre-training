@@ -1,16 +1,16 @@
 # SRE Dashboard Best Practices
 
-*A practical walkthrough of how we built the [demo-cluster](../demo-cluster/) dashboard — the metrics we monitor, the Grafana + Prometheus configuration, and the SRE patterns we leaned on. The dashboard is intentionally minimal but covers a complete fault-detection story; everything here is meant to be reusable.*
+*A practical walkthrough of how we built the [demo-cluster](../demo-cluster/) dashboard — the metrics we monitor, the Perses + Prometheus configuration, and the SRE patterns we leaned on. The dashboard is intentionally minimal but covers a complete fault-detection story; everything here is meant to be reusable.*
 
 ## TL;DR
 
-We built a 19-panel Grafana dashboard for a 3-app demo Kubernetes cluster that demonstrates the **golden signals** (Latency / Throughput / Errors / Saturation) of an SRE workflow alongside an AI agent (K8sGPT) that auto-detects faults. The dashboard exposes two parallel health scores — cluster health and agent self-health — so a viewer can immediately see whether the system is broken AND whether the detector is doing its job.
+We built a 23-panel [Perses](https://perses.dev) dashboard for a 3-app demo Kubernetes cluster that demonstrates the **golden signals** (Latency / Throughput / Errors / Saturation) of an SRE workflow alongside an AI agent (K8sGPT) that auto-detects faults. The dashboard exposes two parallel health scores — cluster health and agent self-health — so a viewer can immediately see whether the system is broken AND whether the detector is doing its job.
 
 The key takeaways:
 
 1. **Golden signals beat raw metrics.** A 4-panel LTES row tells you more than a wall of raw graphs.
 2. **One composite health score is the headline.** Operators don't watch 8 numbers; they watch one and drill in if it drops.
-3. **Empty panels should look healthy, not broken.** Replace Grafana's default "No data" with `✓ All containers running` or similar positive states.
+3. **Empty panels should look healthy, not broken.** Give stat queries an `or vector(0)` fallback, so a healthy cluster shows a green 0 instead of "No data".
 4. **`up == 1` is the only reliable availability signal.** Application-emitted 5xx counters miss connection-refused / pod-down scenarios entirely.
 5. **Scrape intervals are tunable.** 5s for live demos / dashboards, 15-30s for production.
 
@@ -68,24 +68,25 @@ Single 0-100 number penalizing the worst signals:
   - 50  if any of the 3 apps' pod is NotReady
 ```
 
-Caps at 0. Used as the **headline panel** — operators glance at one number to know if anything needs attention.
+The query wraps the sum in `clamp_min(..., 0)`, so the score never goes below 0. Used as the **headline panel** — operators glance at one number to know if anything needs attention.
 
 **Best-practice note**: composite scores work *if and only if* the penalties are calibrated against your own SLOs. A 5% error rate might be normal for one service and catastrophic for another. Build the score, then dial the thresholds against historical data.
 
 ---
 
-## 2. Grafana + Prometheus setup
+## 2. Perses + Prometheus setup
 
 ### 2.1 The stack
 
 We use **kube-prometheus-stack** (the Prometheus Operator chart). It bundles:
 
 - **Prometheus** — the metric store and query engine
-- **Grafana** — the dashboard layer
 - **Alertmanager** — for alerts (not used in our demo, but provisioned)
 - **kube-state-metrics** — exports Kubernetes object state as metrics
 - **node-exporter** — host-level CPU/memory/disk metrics
 - **Prometheus Operator** — manages ServiceMonitor / PodMonitor / Prometheus CRDs
+
+We turn off the chart's bundled dashboard UI (`grafana.enabled: false`) and run [Perses](https://perses.dev), a CNCF dashboard tool whose dashboards are plain resources (`Project`, `GlobalDatasource`, `Dashboard`), from its own chart with [`perses-values.yaml`](../demo-cluster/helm/perses-values.yaml). Set `scrapeInterval` on the Prometheus datasource to match Prometheus (5s here): Perses never queries with a smaller step, and without it assumes 1m, so a 2-minute panel gets three points and its stat tiles can lag a minute behind.
 
 Installed via Helm, pinned to one chart version (this is what `demo-cluster/scripts/up.sh` runs):
 
@@ -115,7 +116,7 @@ prometheus:
         cpu: 750m
 ```
 
-**Why 5s for demos**: paired with Grafana's 5s auto-refresh, every dashboard frame is fresh. Faults appear on screen within ~5s of happening. Critical for video pacing.
+**Why 5s for demos**: paired with the dashboard's 5s auto-refresh, every dashboard frame is fresh. Faults appear on screen within ~5s of happening. Critical for video pacing.
 
 **Why NOT 5s in production**: 6x more data than 30s scraping. Burns more CPU/disk and stresses kube-state-metrics. **Production recommendation: 15-30s scrape, with 5s reserved for short-lived debugging sessions.**
 
@@ -242,27 +243,30 @@ def do_GET(self):
 
 ### 2.5 Dashboard provisioning via ConfigMap
 
-Grafana dashboards are versioned in git as JSON ([`grafana/demo-cluster-overview.json`](../demo-cluster/grafana/demo-cluster-overview.json)) and loaded into Grafana via a labeled ConfigMap:
+The Perses resources are versioned in git in [`demo-cluster/perses/`](../demo-cluster/perses/): the dashboard ([`demo-cluster-overview.json`](../demo-cluster/perses/demo-cluster-overview.json)), its project and the Prometheus datasource. They are loaded into Perses via one labeled ConfigMap:
 
 ```bash
-kubectl --context kind-demo-cluster create configmap demo-cluster-overview-dashboard \
-  --from-file=demo-cluster-overview.json=grafana/demo-cluster-overview.json \
+kubectl --context kind-demo-cluster create configmap demo-cluster-perses \
+  --from-file=perses/project.yaml --from-file=perses/datasource.yaml \
+  --from-file=perses/demo-cluster-overview.json \
   --namespace monitoring --dry-run=client -o yaml | kubectl --context kind-demo-cluster apply -f -
 
-kubectl --context kind-demo-cluster -n monitoring label configmap demo-cluster-overview-dashboard \
-  grafana_dashboard=1 --overwrite
+kubectl --context kind-demo-cluster -n monitoring label configmap demo-cluster-perses \
+  perses.dev/resource=true --overwrite
 ```
 
-The kube-prometheus-stack Grafana sidecar watches for ConfigMaps in the `monitoring` namespace labeled `grafana_dashboard=1` and auto-loads them.
+`up.sh` does the same with every `.yaml` and `.json` file in `perses/`, then waits until Perses has reloaded the dashboard and fails if Perses logged a provisioning error, since Perses reports a rejected resource only in its log.
 
-**Best-practice note — never edit dashboards in the Grafana UI**: changes won't persist across pod restarts (the sidecar rewrites `/tmp/dashboards/*.json` from the labeled ConfigMaps). The flow is:
+The Perses chart's sidecar watches for ConfigMaps in the `monitoring` namespace labeled `perses.dev/resource=true` and writes them into Perses's provisioning folder, which Perses re-reads every 15 seconds.
 
-1. Make changes in JSON locally (or "export JSON" from the UI)
+**Best-practice note — never edit dashboards in the Perses UI**: the next provisioning pass overwrites them with the files from the ConfigMap. The flow is:
+
+1. Make changes in JSON locally (or copy the JSON from the UI's edit view)
 2. Commit to git
 3. Re-apply the ConfigMap (in the demo: re-run `./scripts/up.sh`)
-4. Grafana sidecar picks it up
+4. Perses picks it up within 15 seconds
 
-This pattern is **GitOps for dashboards**. Make it the convention from day one or it'll bite you the moment a teammate restarts a Grafana pod.
+This pattern is **GitOps for dashboards**. Make it the convention from day one or it'll bite you the moment a teammate's UI edit silently disappears.
 
 ---
 
@@ -317,7 +321,7 @@ sum(rate(payments_api_http_requests_total[1m])) and on() (avg(up{job="payments-a
 ```
 
 - `and on() (up == 1)` returns LHS only when `up == 1` — when the target is unreachable, the entire expression returns nothing.
-- Combined with Grafana's `spanNulls: false`, this **renders the line as a visible gap during outages** instead of a flat 0.
+- Combined with `connectNulls: false` on the time series chart, this **renders the line as a visible gap during outages** instead of a flat 0.
 - The flat-0 misrepresents "service is down" as "service is serving 0 RPS". The gap correctly says "we don't know".
 
 In the shipped dashboard, the Throughput and Latency panels append `or on() vector(0)` to this expression, which turns the gap back into a 0 during an outage. Remove that suffix if you want the gap.
@@ -409,14 +413,14 @@ The order matches **how an operator would investigate an alert**:
 Each panel earns its place:
 
 - **Headline panels (full-width, h=4)**: Composite Health. One number, no drill-down needed.
-- **Golden signals row (4× w=6, h=7)**: LTES — the primary detection layer.
+- **Golden signals row (4× w=6, h=9)**: LTES — the primary detection layer.
 - **Detail panels (varies)**: per-category drill-down. Removed redundancy ruthlessly (memory utilization % and per-app memory panels were merged into Saturation + Memory growth rate).
 
-**Best-practice note**: a dashboard with 50 panels is unreadable. Aim for **one screenful** when the dashboard is loaded — viewers shouldn't need to scroll to know if the cluster is healthy. We landed at 19 panels in 52 grid rows, which fits a 1080p browser at 80% zoom.
+**Best-practice note**: a dashboard with 50 panels is unreadable. Aim for **one screenful** when the dashboard is loaded — viewers shouldn't need to scroll to know if the cluster is healthy. We landed at 23 panels in 62 grid rows, which fits a 1080p browser at 80% zoom.
 
 ### 4.3 Adaptive y-axis with conditional limit lines
 
-For memory / saturation panels: we removed fixed `max: 100` from the y-axis so the panel auto-scales to actual data, and added a `vector(100)` series named `limit`, styled as a red dashed line (a Grafana field override on that series name).
+For memory / saturation panels: we removed fixed `max: 100` from the y-axis so the panel auto-scales to actual data, and added a `vector(100)` series named `limit`, styled as a red dashed line (a `querySettings` entry for that query: fixed red, `lineStyle: dashed`, no fill).
 
 In the shipped dashboard that series is the plain `vector(100)`, so the line is always drawn and the y-axis always reaches 100%. With the conditional series from §3.6 instead, the panel behaves like this:
 
@@ -430,17 +434,24 @@ In the shipped dashboard that series is the plain `vector(100)`, so the line is 
 
 ### 4.4 Positive empty states
 
-Grafana's default "No data" message looks like an error. We override it for panels where empty is the goal state:
+A "No data" message looks like an error. For stat panels where 0 is the goal state, the query falls back to 0:
 
-```json
-"fieldConfig": {
-  "defaults": {
-    "noValue": "✓  All containers running"
-  }
-}
+```promql
+sum(kube_pod_container_status_waiting_reason{namespace="demo-apps", reason="CrashLoopBackOff"} == 1) or vector(0)
 ```
 
-The Active fault states table now shows `✓  All containers running` when healthy, and the actual table of failing pods when something's broken. **Empty becomes a meaningful "everything's fine" signal, not an error.**
+The CrashLoopBackOff tile then shows a green `0` when healthy, not "No data". **Empty becomes a meaningful "everything's fine" signal, not an error.**
+
+Tables need a different trick: Perses has no custom "no value" text, so an empty table says "No data". The Active fault states query adds a fallback row only when nothing is failing, and a cell rule turns it into a green "✓ All containers running":
+
+```promql
+(kube_pod_container_status_waiting_reason{namespace="demo-apps"} == 1)
+  or on() label_replace(vector(0), "pod", "all-running", "", "")
+```
+
+The `pod` column maps the value `all-running` to that text. The query sets `instant: true`, so the table reads only the latest sample. Without it, on Perses v0.55 the table kept showing the fallback row during a fault.
+
+Watch the legend size too. A Perses table legend at the bottom of a panel shows 3 rows at `size: "small"` and 5 at `"medium"`, and hides the rest behind a scroll, so a 5-pod panel can hide the very pod that is failing. The dashboard uses `"medium"` and puts the legend on the right of wide panels, where it gets the full panel height. The five top tiles (Demo apps healthy to Composite Health Score) set `legendMode: "on"` to print their series name (`ready`, `pods`, `kills`) above the number; the K8sGPT agent tiles leave it off, since their titles already name the signal.
 
 ### 4.5 Two health scores (not one)
 
@@ -494,18 +505,8 @@ The `sum by(...)` canonicalizes labels so the `on(...)` join becomes unambiguous
 ### 5.5 Stat panel shows "No data" but query returns value
 
 **Symptom**: Direct query against Prometheus returns `100`, panel renders "No data".
-**Cause**: Stat panels with complex expressions sometimes fail to reduce a range query result. Default Grafana behavior is `instant: false`.
-**Fix**: Set `instant: true` and `range: false` on the target:
-
-```json
-"targets": [
-  {
-    "expr": "...",
-    "instant": true,
-    "range": false
-  }
-]
-```
+**Cause**: Stat panels with complex expressions sometimes fail to reduce a range query result.
+**Fix**: The StatChart reduces the range result with `calculation: "last-number"`, which skips the trailing nulls, and a `PrometheusTimeSeriesQuery` takes `instant: true` when you need a single sample.
 
 ### 5.6 Counter metric flapping during pod restarts
 
@@ -515,7 +516,7 @@ The `sum by(...)` canonicalizes labels so the `on(...)` join becomes unambiguous
 
 ### 5.7 kube-prometheus-stack default scrape too slow for dashboards
 
-**Symptom**: Grafana refresh is 5s but charts update every 30s.
+**Symptom**: Dashboard refresh is 5s but charts update every 30s.
 **Cause**: Prometheus scrape is 30s by default — the data isn't updated more often than that.
 **Fix**: Lower scrape interval in helm values (see §2.2).
 
@@ -534,8 +535,8 @@ The demo cluster takes shortcuts a real production setup wouldn't. Specifically:
 | Demo | Production |
 |---|---|
 | 5s scrape interval | 15-30s (cost) |
-| 6h retention | 15d (Prometheus) → 1y (Thanos / Mimir / remote-write to Grafana Cloud) |
-| Local kube-prometheus-stack | Grafana Cloud Metrics or self-hosted Mimir |
+| 6h retention | 15d (Prometheus) → 1y (Thanos / Mimir / remote-write) |
+| Local kube-prometheus-stack | Managed Prometheus or self-hosted Mimir |
 | Chart's default alert rules, no Alertmanager receivers | Rules tuned to your SLOs, with PagerDuty / OpsGenie routing |
 | Single replica per app | HPA + multiple replicas, PodDisruptionBudgets |
 | Slack webhook for K8sGPT | Alertmanager → routing tree → ticketing system |
@@ -552,7 +553,7 @@ The dashboard JSON, queries, and patterns transfer 1:1. The infrastructure layer
 - Google SRE book, [Chapter 6 — Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/) — the golden signals framework.
 - [Prometheus Best Practices](https://prometheus.io/docs/practices/) — official metric naming, labeling, alerting.
 - [kube-prometheus-stack docs](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) — the helm chart we use.
-- [Grafana panel docs](https://grafana.com/docs/grafana/latest/panels-visualizations/) — every panel type's capabilities.
+- [Perses docs](https://perses.dev/perses/docs/) — the dashboard and datasource resources, provisioning, and the panel plugins.
 - [PromQL operators reference](https://prometheus.io/docs/prometheus/latest/querying/operators/) — including the `and`, `or`, `bool` semantics that catch out most people.
 
 ---
@@ -561,8 +562,10 @@ The dashboard JSON, queries, and patterns transfer 1:1. The infrastructure layer
 
 | File | What's in it |
 |---|---|
-| [`demo-cluster/grafana/demo-cluster-overview.json`](../demo-cluster/grafana/demo-cluster-overview.json) | The full dashboard JSON — 19 panels, 3,084 lines. Use as a template. |
-| [`demo-cluster/helm/prometheus-stack-values.yaml`](../demo-cluster/helm/prometheus-stack-values.yaml) | Prometheus + Alertmanager + Grafana tuning. |
+| [`demo-cluster/perses/demo-cluster-overview.json`](../demo-cluster/perses/demo-cluster-overview.json) | The full Perses dashboard — 23 panels. Use as a template. |
+| [`demo-cluster/perses/`](../demo-cluster/perses/) | The Perses project and Prometheus datasource next to it. |
+| [`demo-cluster/helm/prometheus-stack-values.yaml`](../demo-cluster/helm/prometheus-stack-values.yaml) | Prometheus + Alertmanager tuning. |
+| [`demo-cluster/helm/perses-values.yaml`](../demo-cluster/helm/perses-values.yaml) | Perses: provisioning sidecar, no auth, 15s reload. |
 | [`demo-cluster/helm/k8sgpt-values.yaml`](../demo-cluster/helm/k8sgpt-values.yaml) | K8sGPT operator config — `serviceMonitor.additionalLabels` includes the `release` fix. |
 | [`demo-cluster/manifests/payments-api/`](../demo-cluster/manifests/payments-api/) | Go app + Dockerfile + Deployment + ServiceMonitor — the LTE-instrumented service template. |
 | [`demo-cluster/manifests/recommend-svc/`](../demo-cluster/manifests/recommend-svc/) | Python equivalent. |
