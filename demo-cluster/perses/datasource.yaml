@@ -1,0 +1,18 @@
+# Prometheus from kube-prometheus-stack. The Perses server proxies the
+# queries, so the browser never needs to reach the cluster.
+kind: GlobalDatasource
+metadata:
+  name: prometheus
+spec:
+  default: true
+  plugin:
+    kind: PrometheusDatasource
+    spec:
+      # Matches prometheus.prometheusSpec.scrapeInterval. Perses never queries
+      # with a step below it; left unset it assumes 1m, so a 2m panel gets
+      # three points and its last value can be a minute old.
+      scrapeInterval: 5s
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://prometheus-stack-kube-prom-prometheus.monitoring.svc:9090

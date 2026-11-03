@@ -1,21 +1,10 @@
 # kube-prometheus-stack values tuned for a laptop demo cluster.
-# Disables the heavy bits we don't need; keeps Prometheus, Grafana, Alertmanager,
-# kube-state-metrics, and node-exporter.
+# Disables the heavy bits we don't need; keeps Prometheus, Alertmanager,
+# kube-state-metrics, and node-exporter. Dashboards run in Perses
+# (helm/perses-values.yaml), so the chart's bundled dashboard UI is off.
 
 grafana:
-  adminPassword: admin
-  service:
-    type: ClusterIP
-  defaultDashboardsEnabled: true
-  persistence:
-    enabled: false
-  # Anonymous read-only access, so dashboard links open without a login.
-  # Kind-only demo cluster, reached through a local port-forward; do NOT
-  # copy this block to a real environment.
-  grafana.ini:
-    auth.anonymous:
-      enabled: true
-      org_role: Viewer
+  enabled: false
 
 prometheus:
   prometheusSpec:

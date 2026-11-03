@@ -1,0 +1,1675 @@
+{
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "demo-cluster-overview",
+    "project": "demo-cluster"
+  },
+  "spec": {
+    "display": {
+      "name": "Demo Cluster — Fault Detection & Handling",
+      "description": "Fault detection and handling for the demo cluster. One panel per sample app + cluster-level health stats + K8sGPT activity signals."
+    },
+    "duration": "2m",
+    "refreshInterval": "5s",
+    "variables": [],
+    "panels": {
+      "topology": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Topology & services"
+          },
+          "plugin": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Sample apps — `demo-apps` namespace (instrumented with golden signals)\n\n| App | Stack | Limit | /metrics | Role | Fault trigger |\n|---|---|---|---|---|---|\n| 🔴 `payments-api`   | Go     | 128Mi | ✓ | **OOMKill victim**     | `./scripts/trigger-oomkill.sh` → allocates past the limit in the running container after every restart → CrashLoopBackOff |\n| 🟡 `recommend-svc`  | Python | 128Mi + 128Mi `leak-fixture` sidecar | ✓ | **Slow-leak victim**   | `./scripts/trigger-slowleak.sh` → the sidecar's memory climbs 20 MB/min until it is OOMKilled (invisible to K8sGPT until then) |\n| 🟢 `catalog-svc`    | nginx  | 64Mi  | — | **Healthy control**    | none — no traffic, always green |\n| ⚙️ `loadgen`        | curl   | 32Mi  | — | **Traffic generator**  | runs continuously, ~2 req/sec each to payments-api and recommend-svc `/healthz` |\n\n### Detection layers\n\n- **Golden signals (L · T · E · S)** — Throughput / Latency / Errors panels show signs of fault *regardless of root cause*. The Composite Health Score combines them into one 0-100 number — the always-on, root-cause-agnostic detector.\n- **K8sGPT** (`k8sgpt-system`) — scans the `demo-apps` Pods and writes a Result per finding (`kubectl get results -n k8sgpt-system`). With an LLM configured it adds an AI explanation; with a Slack webhook it posts each new Result. Specific, after-the-fact.\n- **watcher** (`k8sgpt-system`) — writes a Result when a ConfigMap labelled `k8sgpt-detection-pack.io/critical=true` is created, changed or deleted.\n\n### Observability — `monitoring` namespace\n\n- **kube-prometheus-stack** — Prometheus (6h retention) + Alertmanager + kube-state-metrics + node-exporter. App `/metrics` scraped via per-app **ServiceMonitor**.\n- **Perses** — this dashboard. Loaded from a labelled ConfigMap by the Perses provisioning sidecar; source: `demo-cluster/perses/demo-cluster-overview.json`."
+            }
+          }
+        }
+      },
+      "apps_healthy": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Demo apps healthy",
+            "description": "Number of pods in demo-apps currently Ready"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal"
+              },
+              "colorMode": "background_solid",
+              "legendMode": "on",
+              "thresholds": {
+                "defaultColor": "#f2495c",
+                "steps": [
+                  {
+                    "value": 1,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 3,
+                    "color": "#73bf69"
+                  }
+                ]
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "sum(kube_pod_status_ready{namespace=\"demo-apps\", condition=\"true\"} == 1) or vector(0)",
+                    "seriesNameFormat": "ready"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "crashloop": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "CrashLoopBackOff",
+            "description": "Containers currently waiting in CrashLoopBackOff. Falls back to 0 when no pods match — keeps the panel showing a green '0' instead of 'No data' when everything is healthy."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal"
+              },
+              "colorMode": "background_solid",
+              "legendMode": "on",
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 1,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)",
+                    "seriesNameFormat": "pods"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "oomkills": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "OOMKills (last 5m)",
+            "description": "Restarts attributable to OOM (container had OOMKilled state × number of restarts in window). The naive increase() on the OOMKilled gauge can't handle rapid CrashLoop cycles — this query is robust to that."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal"
+              },
+              "colorMode": "background_solid",
+              "legendMode": "on",
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 1,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 3,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "sum(max_over_time(kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) * on(pod, container) group_left increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m])) or vector(0)",
+                    "seriesNameFormat": "kills"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "restarts": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Restarts (last 5m)",
+            "description": "Total container restarts in demo-apps within the last 5 minutes"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal"
+              },
+              "colorMode": "background_solid",
+              "legendMode": "on",
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 1.5,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 3,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]))) or on() vector(0)",
+                    "seriesNameFormat": "restarts"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "health_score": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Composite Health Score (0-100, lower = worse)",
+            "description": "Aggregate health score, 0-100 (higher = healthier). Read the score AND the hover on which term is firing.\n\nFormula (each term is subtracted independently, so multiple hits stack):\n  100 (baseline)\n  −50 · CrashLoopBackOff on any demo-apps container\n  −20 · memory working-set > 50% of limit (any container)\n  −30 · memory working-set > 80% of limit (any container)\n  −30 · payments-api HTTP 5xx rate > 1% (1m window)\n  −30 · recommend-svc HTTP 5xx rate > 1% (1m window)\n  −50 · any demo-apps pod not Ready (payments-api / recommend-svc / catalog-svc)\n\nColour bands:\n  ≥ 70 = green (healthy)\n  40–69 = yellow (degraded)\n  <  40 = red (critical)\n\nThe whole point of this panel: detect any of the demo's faults\nwithout knowing the root cause. When it turns red, drill down to the\nLTES row below to see which golden signal is affected."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal",
+                "decimalPlaces": 0
+              },
+              "colorMode": "background_solid",
+              "legendMode": "on",
+              "thresholds": {
+                "defaultColor": "#f2495c",
+                "steps": [
+                  {
+                    "value": 50,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 80,
+                    "color": "#73bf69"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "clamp_min(100 - (((sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)) > bool 0) * 50) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.5) * 20) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.8) * 30) - (((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((min(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", condition=\"true\"}) or vector(1)) < bool 1) * 50), 0)",
+                    "seriesNameFormat": "health"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "throughput": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Throughput — req/sec (T)",
+            "description": "Golden signal T: rate of HTTP requests per second, per service. Generated by the loadgen pod. Drops to 0 while the service's scrape target is down."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "bottom",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "mean"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "requests/sec"
+                },
+                "min": 0
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.15,
+                "connectNulls": false
+              },
+              "querySettings": [
+                {
+                  "queryIndex": 0,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#f2495c"
+                },
+                {
+                  "queryIndex": 1,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#5794f2"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(payments_api_http_requests_total[1m])) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+                    "seriesNameFormat": "payments-api"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(recommend_svc_http_requests_total[1m])) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+                    "seriesNameFormat": "recommend-svc"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Latency p95 — ms (L)",
+            "description": "Golden signal L: 95th percentile request latency, per service. Spikes during load saturation and during fault recovery cycles. Drops to 0 while the service's scrape target is down."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "bottom",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "max"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "milliseconds"
+                },
+                "min": 0
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.15,
+                "connectNulls": false
+              },
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 100,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 500,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "querySettings": [
+                {
+                  "queryIndex": 0,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#f2495c"
+                },
+                {
+                  "queryIndex": 1,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#5794f2"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "((histogram_quantile(0.95, sum by (le) (rate(payments_api_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+                    "seriesNameFormat": "payments-api"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "((histogram_quantile(0.95, sum by (le) (rate(recommend_svc_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+                    "seriesNameFormat": "recommend-svc"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "errors": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Service errors — % (E)",
+            "description": "Golden signal E. Combines two failure modes: (a) HTTP 5xx responses emitted by the app itself, and (b) Prometheus scrape unavailability (`up == 0`) — the only signal that catches OOMKill / CrashLoop / pod-down faults where the server never gets a chance to emit a 5xx because the connection is refused. catalog-svc uses kube_pod_status_ready since it has no /metrics endpoint. 100% means target was unreachable for the entire window."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "bottom",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "max"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "percent"
+                },
+                "min": 0,
+                "max": 100
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.25,
+                "connectNulls": false
+              },
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 1,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 5,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "querySettings": [
+                {
+                  "queryIndex": 0,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#f2495c"
+                },
+                {
+                  "queryIndex": 1,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#5794f2"
+                },
+                {
+                  "queryIndex": 2,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#73bf69"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"payments-api\"}[1m])) or vector(1))) * 100",
+                    "seriesNameFormat": "payments-api"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"recommend-svc\"}[1m])) or vector(1))) * 100",
+                    "seriesNameFormat": "recommend-svc"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(1 - (avg(avg_over_time(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", condition=\"true\"}[1m])) or vector(1))) * 100",
+                    "seriesNameFormat": "catalog-svc"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "saturation": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Saturation — memory % of limit (S)",
+            "description": "Golden signal S: each container's memory working set as % of its memory limit (top 6, running pods only). Memory only: it is the resource every demo fault exhausts. A container OOMKilled in the last minute shows as 100%: memory is sampled about every 15 s, so the sample at the moment of the kill is usually missed. The red dashed line is the 100% limit; it is always drawn, so the y-axis always reaches 100%."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "bottom",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "max"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "percent"
+                },
+                "min": 0
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.2,
+                "connectNulls": false
+              },
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 50,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 80,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "querySettings": [
+                {
+                  "queryIndex": 1,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#f2495c",
+                  "lineStyle": "dashed",
+                  "areaOpacity": 0
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "topk(6, (max by (namespace, pod, container) (  container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", container!=\"\", container!=\"POD\"}   / on(namespace, pod, container) group_left   kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"}   * 100  or 100 * (kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", reason=\"OOMKilled\"} == 1)   and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m]) > 0)) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1)))",
+                    "seriesNameFormat": "{{container}} @ {{pod}}"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "vector(100)",
+                    "seriesNameFormat": "limit"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "restart_rate": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Restart rate per pod (1m window)",
+            "description": "rate(restarts/sec). Goes high during CrashLoopBackOff cycles, returns to 0 when stable. The cleanest live signal of an ongoing fault."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "right",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "max"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "ops/sec"
+                }
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.25,
+                "connectNulls": true
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "topk(6, (sum by (namespace, pod, container) (rate(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "seriesNameFormat": "{{container}} @ {{pod}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "restart_events": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Container restart events / min",
+            "description": "increase(restart_total)[1m] per pod, rendered as bars. Each bar is a new container restart in that minute. In this demo the OOMKill victim restarts only when OOMed, so this also functions as an OOMKill rate panel — but it's robust to kube-state-metrics' sparse emission of the OOMKilled gauge during long backoff. Drops to 0 once the pod stabilizes."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "right",
+                "mode": "list"
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                }
+              },
+              "visual": {
+                "display": "bar",
+                "lineWidth": 1,
+                "areaOpacity": 0.7,
+                "connectNulls": false
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "topk(6, (sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "seriesNameFormat": "{{container}} @ {{pod}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "restarts_over_time": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Container restarts over time",
+            "description": "Restart count per pod. Climbing here means CrashLoopBackOff — the signal K8sGPT's Pod analyzer flags."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "right",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                }
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.05,
+                "connectNulls": false
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "topk(6, (sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "seriesNameFormat": "{{container}} @ {{pod}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "detections": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT detection events (per minute)",
+            "description": "Each bar marks WHEN K8sGPT created a new Result (and, with Slack on, posted it) — bar height = number of new Result CRDs that landed in that 1-minute window. Flat-zero baseline means no recent detections; vertical spikes are the exact moments the agent fired. More telling than a cumulative count: when you trigger OOMKill at T+10s and a bar appears at ~T+30s, you see the agent reacting in real time. Sourced from delta(k8sgpt_number_of_results[1m]), clamped to 0 to suppress the dips when Result CRDs are garbage-collected."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                },
+                "min": 0
+              },
+              "visual": {
+                "display": "bar",
+                "lineWidth": 1,
+                "areaOpacity": 0.8,
+                "connectNulls": false
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "clamp_min(sum by (object_namespace) (delta(k8sgpt_number_of_results[1m])), 0) or on() vector(0)",
+                    "seriesNameFormat": "{{object_namespace}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "memory_growth": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Memory growth rate (per pod, 2m window)",
+            "description": "rate() of container_memory_working_set_bytes — the SLOPE of the memory line, in bytes/sec. The cleanest live signal of a slow leak: visible at any absolute memory level. Negative values during OOM cycles are kernel reclaim, not anomalies. Thresholds: yellow ≥ 100 KB/s (~6 MB/min), red ≥ 500 KB/s (~30 MB/min)."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "right",
+                "mode": "table",
+                "size": "medium",
+                "values": [
+                  "last-number",
+                  "max"
+                ]
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "bytes/sec"
+                }
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.2,
+                "connectNulls": true
+              },
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 100000,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 500000,
+                    "color": "#f2495c"
+                  }
+                ]
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "topk(6, (deriv(sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"})[2m:15s]) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "seriesNameFormat": "{{container}} @ {{pod}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "llm_calls": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "LLM calls — errors + latency",
+            "description": "Two correlated signals for the K8sGPT → LLM path, on a shared time axis:\n• Errors (left Y-axis, ops/sec) — failed LLM calls and reconcile errors averaged over 5m. Spikes during rate-limiting, auth failures, or network issues to the provider.\n• Avg latency (right Y-axis, seconds) — mean reconcile duration from controller_runtime_reconcile_time_seconds. The LLM round-trip dominates this, so it's effectively the LLM call latency. Healthy is a few seconds or less on a small hosted model; climbing latency without errors usually means the model is throttled but still serving.\nWatching both together reveals the failure mode: errors spike + latency steady = hard rejection (429/auth); latency climbs first then errors = the LLM is dying slowly."
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "legend": {
+                "position": "bottom",
+                "mode": "list"
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "ops/sec"
+                },
+                "min": 0
+              },
+              "visual": {
+                "display": "line",
+                "lineWidth": 2,
+                "areaOpacity": 0.2,
+                "connectNulls": true
+              },
+              "querySettings": [
+                {
+                  "queryIndex": 2,
+                  "colorMode": "fixed-single",
+                  "colorValue": "#5794f2",
+                  "lineStyle": "dashed",
+                  "format": {
+                    "unit": "seconds"
+                  }
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or on() vector(0)",
+                    "seriesNameFormat": "failed / sec ({{backend}})"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(rate(k8sgpt_reconcile_error_count[5m])) or on() vector(0)",
+                    "seriesNameFormat": "reconcile errors / sec"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+                    "seriesNameFormat": "avg latency"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "fault_states": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Active fault states",
+            "description": "Containers in demo-apps currently in a waiting state (CrashLoopBackOff / ImagePullBackOff / ErrImagePull / ContainerCreating). When the cluster is healthy it shows a single \"✓ All containers running\" row (a fallback series the query adds only when nothing is waiting) — that's the goal state. During a fault the table populates with one row per affected pod, color-coded by reason. These are exactly the events K8sGPT's Pod analyzer flags."
+          },
+          "plugin": {
+            "kind": "Table",
+            "spec": {
+              "density": "compact",
+              "defaultColumnHidden": true,
+              "columnSettings": [
+                {
+                  "name": "pod",
+                  "header": "Pod",
+                  "align": "left",
+                  "width": 200,
+                  "cellSettings": [
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "all-running"
+                        }
+                      },
+                      "text": "✓ All containers running",
+                      "textColor": "#73bf69"
+                    }
+                  ]
+                },
+                {
+                  "name": "container",
+                  "header": "Container",
+                  "align": "left",
+                  "width": 110
+                },
+                {
+                  "name": "reason",
+                  "header": "Reason",
+                  "align": "left",
+                  "cellSettings": [
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "CrashLoopBackOff"
+                        }
+                      },
+                      "text": "🔴 CrashLoopBackOff",
+                      "textColor": "#f2495c"
+                    },
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "ImagePullBackOff"
+                        }
+                      },
+                      "text": "🔴 ImagePullBackOff",
+                      "textColor": "#f2495c"
+                    },
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "ErrImagePull"
+                        }
+                      },
+                      "text": "🔴 ErrImagePull",
+                      "textColor": "#f2495c"
+                    },
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "ContainerCreating"
+                        }
+                      },
+                      "text": "🟡 ContainerCreating",
+                      "textColor": "#fade2a"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\"} == 1) or on() label_replace(vector(0), \"pod\", \"all-running\", \"\", \"\")",
+                    "instant": true
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "diagnoses": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT diagnoses by Kind",
+            "description": "Currently-active K8sGPT Result CRDs grouped by the Kubernetes Kind that triggered them (Pod, Service, Deployment, etc.). When the cluster is healthy this shows only the Slack sink row (or No data without Slack). During a fault each row is one K8sGPT finding (with an AI explanation when an LLM is configured). Refreshes from k8sgpt_number_of_results_by_type emitted by the operator."
+          },
+          "plugin": {
+            "kind": "Table",
+            "spec": {
+              "density": "compact",
+              "defaultColumnHidden": true,
+              "columnSettings": [
+                {
+                  "name": "kind",
+                  "header": "Kind",
+                  "align": "left"
+                },
+                {
+                  "name": "name",
+                  "header": "Resource",
+                  "align": "left"
+                },
+                {
+                  "name": "object_namespace",
+                  "header": "Namespace",
+                  "align": "left"
+                },
+                {
+                  "name": "value",
+                  "header": "Count / status",
+                  "align": "left",
+                  "cellSettings": [
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "0"
+                        }
+                      },
+                      "text": "✗ unreachable",
+                      "textColor": "#f2495c"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(k8sgpt_number_of_results_by_type or label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"}, \"kind\", \"Slack sink\", \"webhook\", \".*\"), \"name\", \"incidents-demo (webhook)\", \"webhook\", \".*\"), \"object_namespace\", \"—\", \"webhook\", \".*\"))",
+                    "instant": true
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "agent_health": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT agent — Health",
+            "description": "Composite 0-100 score for the K8sGPT agent. 100 = no errors. Subtracts 30 per active error mode (failed AI calls / reconcile errors) when either exceeds 0.1/s averaged over 5 minutes. The agent's own watchdog — separate from the cluster's health."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal"
+              },
+              "colorMode": "background_solid",
+              "legendMode": "off",
+              "thresholds": {
+                "defaultColor": "#f2495c",
+                "steps": [
+                  {
+                    "value": 50,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 80,
+                    "color": "#73bf69"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "sum(clamp_min(100 - 30 * ((rate(k8sgpt_number_of_failed_backend_ai_calls[5m]) > bool 0.1) or vector(0)) - 30 * ((rate(k8sgpt_reconcile_error_count[5m]) > bool 0.1) or vector(0)), 0))",
+                    "seriesNameFormat": "Health"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "agent_reconciles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT agent — Reconciles/s",
+            "description": "Throughput. A 'reconcile' is one iteration of the K8sGPT controller's main work loop — it wakes up when a watched resource changes (or on a periodic tick), scans the cluster, calls the LLM (when configured), writes Result CRDs, and posts to Slack (when configured). This is the rate of those iterations per second. K8sGPT's controller-runtime default re-sync is ~10 minutes, so 0 in a 5-minute window during idle is normal (shown as blue, not red). Only worry if it's still 0 during an active fault. Source: controller_runtime_reconcile_total{controller=\"k8sgpt\"}."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "ops/sec",
+                "decimalPlaces": 2
+              },
+              "colorMode": "background_solid",
+              "legendMode": "off",
+              "thresholds": {
+                "defaultColor": "#5794f2",
+                "steps": [
+                  {
+                    "value": 0.001,
+                    "color": "#73bf69"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(controller_runtime_reconcile_total{controller=\"k8sgpt\"}[5m]))) or on() vector(0)",
+                    "seriesNameFormat": "Reconciles/s"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "agent_latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT agent — Avg latency",
+            "description": "Latency. Average duration of a single reconcile, in seconds. Mostly dominated by the LLM round-trip — slow LLM = climbing latency here. Healthy is a few seconds or less on a small hosted model; far longer usually means the provider is rate-limiting or the model is overloaded. 0 during idle just means no recent reconciles to measure (shown as blue, not green — green would imply 'fast', but there's nothing to be fast at). Source: controller_runtime_reconcile_time_seconds_sum / count."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "seconds",
+                "decimalPlaces": 2
+              },
+              "colorMode": "background_solid",
+              "legendMode": "off",
+              "thresholds": {
+                "defaultColor": "#5794f2",
+                "steps": [
+                  {
+                    "value": 0.001,
+                    "color": "#73bf69"
+                  },
+                  {
+                    "value": 0.5,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 2,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+                    "seriesNameFormat": "Avg latency"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "agent_errors": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT agent — Errors/s",
+            "description": "Errors. Combined rate of two failure types per second: failed LLM calls (k8sgpt_number_of_failed_backend_ai_calls — rate limits, auth issues, network drops) AND controller reconcile errors (k8sgpt_reconcile_error_count — anything the controller couldn't process). Both feed the Health composite. Spikes during quota burn."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "ops/sec",
+                "decimalPlaces": 3
+              },
+              "colorMode": "background_solid",
+              "legendMode": "off",
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 0.05,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 0.2,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "(sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) + sum(rate(k8sgpt_reconcile_error_count[5m]))) or on() vector(0)",
+                    "seriesNameFormat": "Errors/s"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "agent_saturation": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "K8sGPT agent — Saturation",
+            "description": "Saturation. Percentage of the controller's worker pool currently busy: active_workers / max_concurrent_reconciles × 100. K8sGPT defaults to max=1 worker, so this is 0% idle or 100% busy. Holds at 100% while an LLM call is in flight — sustained 100% means slow LLM is bottlenecking throughput even if errors are low."
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "percent",
+                "decimalPlaces": 0
+              },
+              "colorMode": "background_solid",
+              "legendMode": "off",
+              "thresholds": {
+                "defaultColor": "#73bf69",
+                "steps": [
+                  {
+                    "value": 70,
+                    "color": "#fade2a"
+                  },
+                  {
+                    "value": 95,
+                    "color": "#f2495c"
+                  }
+                ]
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "datasource": {
+                      "kind": "PrometheusDatasource",
+                      "name": "prometheus"
+                    },
+                    "query": "((sum(controller_runtime_active_workers{controller=\"k8sgpt\"}) / clamp_min(sum(controller_runtime_max_concurrent_reconciles{controller=\"k8sgpt\"}), 1)) * 100) or on() vector(0)",
+                    "seriesNameFormat": "Saturation"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "layouts": [
+      {
+        "kind": "Grid",
+        "spec": {
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 7,
+              "content": {
+                "$ref": "#/spec/panels/topology"
+              }
+            },
+            {
+              "x": 0,
+              "y": 7,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/apps_healthy"
+              }
+            },
+            {
+              "x": 6,
+              "y": 7,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/crashloop"
+              }
+            },
+            {
+              "x": 12,
+              "y": 7,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/oomkills"
+              }
+            },
+            {
+              "x": 18,
+              "y": 7,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/restarts"
+              }
+            },
+            {
+              "x": 0,
+              "y": 11,
+              "width": 24,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/health_score"
+              }
+            },
+            {
+              "x": 0,
+              "y": 15,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/throughput"
+              }
+            },
+            {
+              "x": 6,
+              "y": 15,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/latency"
+              }
+            },
+            {
+              "x": 12,
+              "y": 15,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/errors"
+              }
+            },
+            {
+              "x": 18,
+              "y": 15,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/saturation"
+              }
+            },
+            {
+              "x": 0,
+              "y": 24,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/restart_rate"
+              }
+            },
+            {
+              "x": 12,
+              "y": 24,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/restart_events"
+              }
+            },
+            {
+              "x": 0,
+              "y": 32,
+              "width": 16,
+              "height": 10,
+              "content": {
+                "$ref": "#/spec/panels/restarts_over_time"
+              }
+            },
+            {
+              "x": 16,
+              "y": 32,
+              "width": 8,
+              "height": 5,
+              "content": {
+                "$ref": "#/spec/panels/fault_states"
+              }
+            },
+            {
+              "x": 16,
+              "y": 37,
+              "width": 8,
+              "height": 5,
+              "content": {
+                "$ref": "#/spec/panels/detections"
+              }
+            },
+            {
+              "x": 0,
+              "y": 42,
+              "width": 24,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/memory_growth"
+              }
+            },
+            {
+              "x": 0,
+              "y": 50,
+              "width": 8,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/diagnoses"
+              }
+            },
+            {
+              "x": 8,
+              "y": 50,
+              "width": 8,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/llm_calls"
+              }
+            },
+            {
+              "x": 16,
+              "y": 50,
+              "width": 8,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/agent_health"
+              }
+            },
+            {
+              "x": 0,
+              "y": 58,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/agent_reconciles"
+              }
+            },
+            {
+              "x": 6,
+              "y": 58,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/agent_latency"
+              }
+            },
+            {
+              "x": 12,
+              "y": 58,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/agent_errors"
+              }
+            },
+            {
+              "x": 18,
+              "y": 58,
+              "width": 6,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/agent_saturation"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

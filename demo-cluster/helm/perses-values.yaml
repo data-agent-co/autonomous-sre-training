@@ -1,0 +1,33 @@
+# Perses values for a laptop demo cluster: one replica, no auth, dashboards
+# and datasources provisioned from ConfigMaps.
+
+# Loads every ConfigMap in this namespace labelled perses.dev/resource=true
+# (scripts/up.sh creates one from demo-cluster/perses/) into the
+# provisioning folder.
+sidecar:
+  enabled: true
+  allNamespaces: false
+
+config:
+  # No login, so dashboard links open straight away. Kind/k3d-only demo
+  # cluster, reached through a local port-forward; do NOT copy this to a
+  # real environment.
+  security:
+    enable_auth: false
+  # Re-read the provisioning folder often, so a re-run of up.sh shows the
+  # new dashboard within seconds. It also overwrites edits made in the UI.
+  provisioning:
+    folders:
+      - /etc/perses/provisioning
+    interval: 15s
+
+resources:
+  requests:
+    memory: 64Mi
+    cpu: 20m
+  limits:
+    memory: 256Mi
+    cpu: 250m
+
+testFramework:
+  enabled: false

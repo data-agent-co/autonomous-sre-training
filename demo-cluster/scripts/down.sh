@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tear down everything up.sh and the trigger scripts start: the Grafana
+# Tear down everything up.sh and the trigger scripts start: the Perses
 # port-forward, a running OOMKill loop (trigger-oomkill.sh), and the
 # cluster itself.
 #
@@ -16,8 +16,8 @@ source "$SCRIPT_DIR/lib.sh"
 
 # Background helpers first, so none of them is left pointing at a cluster
 # that no longer exists.
-if stop_pidfile "$GRAFANA_PF_PIDFILE" "$GRAFANA_PF_MATCH"; then
-  echo "stopped the Grafana port-forward"
+if stop_pidfile "$PERSES_PF_PIDFILE" "$PERSES_PF_MATCH"; then
+  echo "stopped the Perses port-forward"
 fi
 if stop_pidfile "$OOM_LOOP_PIDFILE" "$OOM_LOOP_MATCH"; then
   echo "stopped the OOMKill loop"

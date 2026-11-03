@@ -7,7 +7,7 @@
 #   1. Stop the slow leak and the OOMKill loop
 #   2. Replace payments-api (restart count and back-off start from zero)
 #      and recommend-svc (memory back to baseline)
-#   3. Restart Prometheus (wipes its TSDB, so Grafana graphs start flat)
+#   3. Restart Prometheus (wipes its TSDB, so Perses graphs start flat)
 #   4. Restart slack-relay, if Slack is on, so it forgets what it posted
 #   5. Restart the watcher, so it forgets what it reported
 #   6. Delete all K8sGPT Results and leftover watcher helm-test pods

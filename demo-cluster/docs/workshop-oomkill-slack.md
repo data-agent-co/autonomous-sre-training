@@ -1,6 +1,6 @@
 # Workshop: From OOMKill to a K8sGPT alert in Slack
 
-In this lab you OOMKill payments-api with `trigger-oomkill.sh` and follow the alert to Slack. K8sGPT analyzes the crashed pod and posts its diagnosis, with an LLM explanation, to `#incidents-demo` within about a minute. Grafana is only the view on the side: it shows the same fault as graphs.
+In this lab you OOMKill payments-api with `trigger-oomkill.sh` and follow the alert to Slack. K8sGPT analyzes the crashed pod and posts its diagnosis, with an LLM explanation, to `#incidents-demo` within about a minute. Perses is only the view on the side: it shows the same fault as graphs.
 
 ## Before you start
 
@@ -15,11 +15,11 @@ You need the demo cluster running with Slack and an LLM turned on. Run every com
 
 Without an LLM, K8sGPT still posts, but the Report in Slack is empty.
 
-## Step 1: Open Slack (and Grafana, if you like)
+## Step 1: Open Slack (and Perses, if you like)
 
 Open `#incidents-demo` and scroll to the bottom. The last message should be the test post from `check-slack.sh`. Everything after it comes from this lab.
 
-Optional: open Grafana at <http://localhost:3000/d/demo-cluster-overview> (login `admin` / `admin`) next to it. Healthy means Demo apps healthy = 3 and every other tile in the top row is 0, green.
+Optional: open the Perses dashboard at <http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview> (no login) next to it. Healthy means Demo apps healthy = 3 and every other tile in the top row is 0, green.
 
 ## Step 2: Trigger the OOMKill
 
@@ -76,9 +76,9 @@ K8sGPT anonymizes names before it calls the LLM, so the explanation may show a p
 
 **Check yourself:** after 2 minutes the channel has one K8sGPT post for payments-api with a filled-in Report, not two.
 
-## Step 4 (optional): See the same fault in Grafana
+## Step 4 (optional): See the same fault in Perses
 
-Grafana shows the fault as graphs but doesn't explain it. With the dashboard open, you should see these within 1–2 minutes:
+Perses shows the fault as graphs but doesn't explain it. With the dashboard open, you should see these within 1–2 minutes:
 
 | Panel | What you see |
 | --- | --- |
@@ -101,7 +101,7 @@ It prints `OOMKill loop stopped`. payments-api recovers at its next restart, whi
 
 To get a clean dashboard right away, run `./scripts/soft-reset.sh` instead. It stops the loop, replaces the payments-api pod and restarts Prometheus, so the graphs start flat. It also clears K8sGPT's Results.
 
-You are done when no new posts arrive in `#incidents-demo` and Grafana's top row is green again.
+You are done when no new posts arrive in `#incidents-demo` and the dashboard's top row is green again.
 
 ## Troubleshooting
 

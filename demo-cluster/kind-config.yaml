@@ -1,7 +1,7 @@
 # kind cluster for the demo. scripts/up.sh creates it with
 # `kind create cluster --name $CLUSTER_NAME --image <pinned node image>`;
-# --name overrides the name below. No host port mappings: Grafana is reached
-# through a kubectl port-forward (scripts/grafana.sh, GRAFANA_PORT), so a
+# --name overrides the name below. No host port mappings: Perses is reached
+# through a kubectl port-forward (scripts/perses.sh, PERSES_PORT), so a
 # second cluster under another CLUSTER_NAME can run next to this one.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4

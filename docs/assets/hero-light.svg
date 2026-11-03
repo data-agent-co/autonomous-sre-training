@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
 <title id="title">Build your own autonomous SRE in minutes</title>
-<desc id="desc">An agent inside a Kubernetes cluster inspects nodes and flags an OOMKilled payments-api pod. Hands-on workshop with K8sGPT, Prometheus and Grafana on a local kind cluster. Powered by DataAgent.</desc>
+<desc id="desc">An agent inside a Kubernetes cluster inspects nodes and flags an OOMKilled payments-api pod. Hands-on workshop with K8sGPT, Prometheus and Perses on a local kind cluster. Powered by DataAgent.</desc>
 <rect width="1280" height="640" rx="16" fill="#fafaf7"/>
 <line x1="1052.0" y1="341.2" x2="1026.3" y2="414.1" stroke="#a0a7b3" stroke-width="1.25" stroke-dasharray="4 5" stroke-linecap="round"/>
 <line x1="1089.5" y1="345.5" x2="1105.9" y2="489.1" stroke="#a0a7b3" stroke-width="1.25" stroke-dasharray="4 5" stroke-linecap="round"/>
@@ -118,7 +118,7 @@
 <text x="80" y="118" fill="#6b4fc4" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="2.5">HANDS-ON WORKSHOP</text>
 <text x="80" y="190" fill="#1a1d24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" letter-spacing="-1">Build your own</text>
 <text x="80" y="256" fill="#1a1d24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" letter-spacing="-1">autonomous SRE <tspan fill="#6b4fc4">in minutes</tspan></text>
-<text x="80" y="310" fill="#5a6270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22">K8sGPT, Prometheus and Grafana on a local kind cluster</text>
+<text x="80" y="310" fill="#5a6270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22">K8sGPT, Prometheus and Perses on a local kind cluster</text>
 <text x="80" y="604" fill="#8a93a3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">github.com/data-agent-co/autonomous-sre-training</text>
 <text x="1200" y="604" fill="#5a6270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" text-anchor="end">Powered by <tspan fill="#1a1d24" font-weight="600">DataAgent</tspan></text>
 </svg>

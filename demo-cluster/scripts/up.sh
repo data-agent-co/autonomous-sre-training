@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bring up the demo cluster end to end: a kind (or k3d) cluster with the
-# sample apps, kube-prometheus-stack (Prometheus + Grafana), the K8sGPT
-# operator and the watcher. Idempotent: safe to re-run against an existing
+# sample apps, kube-prometheus-stack (Prometheus + Alertmanager), Perses
+# dashboards, the K8sGPT operator and the watcher. Idempotent: safe to re-run against an existing
 # cluster.
 #
 # Settings come from demo-cluster/.env, which is optional (see .env.example):
@@ -11,7 +11,7 @@
 # Environment:
 #   CLUSTER_NAME=demo-cluster  cluster to create or reuse
 #   CLUSTER_PROVIDER=kind      kind or k3d: the tool that runs the cluster
-#   GRAFANA_PORT=3000          local port for the Grafana port-forward
+#   PERSES_PORT=8080           local port for the Perses port-forward
 #   ENV_FILE=demo-cluster/.env settings file to load
 #   KIND_NODE_IMAGE=...        node image for a new kind cluster (empty = kind's
 #                              default); ignored with k3d
@@ -30,6 +30,7 @@ REPO_ROOT="$(cd "$DEMO_DIR/.." && pwd)"
 KIND_NODE_IMAGE="${KIND_NODE_IMAGE-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
 METRICS_SERVER_VERSION="v0.9.0"
 KUBE_PROMETHEUS_STACK_VERSION="91.9.0"
+PERSES_CHART_VERSION="0.24.0"   # Perses v0.55.0
 K8SGPT_OPERATOR_VERSION="0.2.29"
 # Tag of ghcr.io/k8sgpt-ai/k8sgpt, the image the operator runs (set in the CR).
 # shellcheck disable=SC2034  # read through ${!var} in do_k8sgpt
@@ -48,7 +49,7 @@ WATCHER_IMAGE="k8s-watcher:dev"
 # The chart names its Deployment k8s-watcher.fullname, which is the release name
 # when that already contains the chart name ("k8s-watcher").
 WATCHER_DEPLOY="$WATCHER_RELEASE"
-GRAFANA_PORT="${GRAFANA_PORT:-3000}"
+PERSES_PORT="${PERSES_PORT:-8080}"
 
 : "${LLM_API_KEY:=}"
 : "${SLACK_WEBHOOK_URL:=}"
@@ -287,13 +288,63 @@ do_servicemonitors() {
   demo_kubectl apply -f manifests/recommend-svc/servicemonitor.yaml
 }
 
+do_perses() {
+  demo_helm upgrade --install perses perses \
+    --repo https://perses.github.io/helm-charts \
+    --version "$PERSES_CHART_VERSION" \
+    --namespace "$NS_MON" \
+    -f helm/perses-values.yaml \
+    --wait --timeout 5m
+}
+
 do_dashboard() {
-  demo_kubectl create configmap demo-cluster-overview-dashboard \
-    --from-file=demo-cluster-overview.json=grafana/demo-cluster-overview.json \
+  # The .yaml and .json files in perses/ (project, datasource, dashboards) go
+  # into one ConfigMap; anything else there (.DS_Store, notes) stays out. The
+  # Perses sidecar copies it into the provisioning folder, and Perses loads it
+  # within helm/perses-values.yaml's interval.
+  local f files=() since
+  for f in perses/*.yaml perses/*.json; do
+    [[ -f "$f" ]] && files+=(--from-file="$f")
+  done
+  since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  demo_kubectl create configmap demo-cluster-perses \
+    "${files[@]}" \
     --namespace "$NS_MON" \
     --dry-run=client -o yaml | demo_kubectl apply -f -
-  demo_kubectl -n "$NS_MON" label configmap demo-cluster-overview-dashboard \
-    grafana_dashboard=1 --overwrite >/dev/null
+  demo_kubectl -n "$NS_MON" label configmap demo-cluster-perses \
+    perses.dev/resource=true --overwrite >/dev/null
+  # Old dashboard ConfigMap from earlier up.sh runs.
+  demo_kubectl -n "$NS_MON" delete configmap demo-cluster-overview-dashboard --ignore-not-found >/dev/null
+  wait_dashboard_loaded "$since"
+}
+
+# Perses rejects a bad resource only in its log and keeps serving the last
+# good version, so the ConfigMap being applied proves nothing. Wait until the
+# dashboard has been reloaded after $1 (updatedAt moves on every successful
+# reload) with no provisioning error logged since then.
+wait_dashboard_loaded() {
+  local since="$1" ready url body updated errors
+  sleep 2  # give the sidecar time to write the new files
+  ready="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  url="/api/v1/namespaces/$NS_MON/services/perses:8080/proxy/api/v1/projects/demo-cluster/dashboards/demo-cluster-overview"
+  for _ in $(seq 1 30); do
+    errors="$(demo_kubectl -n "$NS_MON" logs perses-0 -c perses --since-time="$since" 2>/dev/null \
+      | grep 'level=error' | grep -i 'provisioning' || true)"
+    if [[ -n "$errors" ]]; then
+      echo "Perses rejected a resource from perses/:" >&2
+      echo "$errors" | tail -5 >&2
+      return 1
+    fi
+    body="$(demo_kubectl get --raw "$url" 2>/dev/null || true)"
+    updated="$(printf %s "$body" | grep -o '"updatedAt":"[^"]*"' | cut -d'"' -f4 || true)"
+    if [[ -n "$updated" && "$updated" > "$ready" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Perses did not load the dashboard within 60s. Last Perses log lines:" >&2
+  demo_kubectl -n "$NS_MON" logs perses-0 -c perses --tail=10 >&2 || true
+  return 1
 }
 
 do_k8sgpt_operator() {
@@ -420,8 +471,8 @@ do_watcher() {
   fi
 }
 
-do_grafana() {
-  GRAFANA_PORT="$GRAFANA_PORT" "$SCRIPT_DIR/grafana.sh"
+do_perses_port_forward() {
+  PERSES_PORT="$PERSES_PORT" "$SCRIPT_DIR/perses.sh"
 }
 
 do_smoke_test() {
@@ -446,7 +497,8 @@ step "build + load sample images"     do_build_images
 step "deploy sample apps + loadgen"   do_deploy_apps
 step "kube-prometheus-stack"          do_prometheus_stack
 step "ServiceMonitors"                do_servicemonitors
-step "Grafana dashboard"              do_dashboard
+step "Perses"                         do_perses
+step "Perses dashboard"               do_dashboard
 step "K8sGPT operator"                do_k8sgpt_operator
 if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
   step "Slack relay + probe"          do_slack
@@ -457,23 +509,23 @@ step "K8sGPT CR + LLM secret"         do_k8sgpt
 step "watcher"                        do_watcher
 step "pod smoke-test"                 do_smoke_test
 
-optional_step "Grafana port-forward"  do_grafana
+optional_step "Perses port-forward"   do_perses_port_forward
 
 KC="kubectl --context $KUBE_CONTEXT"
 RUN="$RUN_PREFIX"
-GRAFANA_RUN="$RUN"
-if [[ "$GRAFANA_PORT" != "3000" ]]; then
-  GRAFANA_RUN+="GRAFANA_PORT=$GRAFANA_PORT "
+PERSES_RUN="$RUN"
+if [[ "$PERSES_PORT" != "8080" ]]; then
+  PERSES_RUN+="PERSES_PORT=$PERSES_PORT "
 fi
 VERIFY="  $KC get pods -A"
 if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
   VERIFY+=$'\n  ./scripts/check-slack.sh'
 fi
-GRAFANA_URL="http://localhost:${GRAFANA_PORT}/d/demo-cluster-overview"
-if pidfile_alive "$GRAFANA_PF_PIDFILE" "$GRAFANA_PF_MATCH"; then
-  GRAFANA_STATUS="port-forwarded in the background:"
+PERSES_URL="http://localhost:${PERSES_PORT}/projects/demo-cluster/dashboards/demo-cluster-overview"
+if pidfile_alive "$PERSES_PF_PIDFILE" "$PERSES_PF_MATCH"; then
+  PERSES_STATUS="port-forwarded in the background:"
 else
-  GRAFANA_STATUS="not port-forwarded (see the WARN above). Start it with ${GRAFANA_RUN}./scripts/grafana.sh, then open:"
+  PERSES_STATUS="not port-forwarded (see the WARN above). Start it with ${PERSES_RUN}./scripts/perses.sh, then open:"
 fi
 
 cat <<EOF
@@ -498,10 +550,10 @@ See what K8sGPT and the watcher found:
   $KC -n $NS_K8SGPT get results
   $KC -n $NS_K8SGPT get results -o yaml
 
-Grafana is $GRAFANA_STATUS
-  $GRAFANA_URL  (admin / admin)
-  Restart the port-forward: ${GRAFANA_RUN}./scripts/grafana.sh
-  Stop it:                  ${RUN}./scripts/grafana.sh --stop
+Perses is $PERSES_STATUS
+  $PERSES_URL  (no login)
+  Restart the port-forward: ${PERSES_RUN}./scripts/perses.sh
+  Stop it:                  ${RUN}./scripts/perses.sh --stop
 
 Tear everything down:  ${RUN}./scripts/down.sh
 
