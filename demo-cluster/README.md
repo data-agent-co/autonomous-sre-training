@@ -160,7 +160,7 @@ It runs these steps in order, each with its own log file:
 1. **kind cluster** (or **k3d cluster**): creates `demo-cluster` (or reuses it).
 2. **namespaces**: `demo-apps`, `monitoring`, `k8sgpt-system`.
 3. **metrics-server**, for `kubectl top`.
-4. **build + load sample images**: `payments-api:demo` and `recommend-svc:demo`,
+4. **build + load sample images**: `localhost/payments-api:demo` and `localhost/recommend-svc:demo`,
    built locally and loaded into the cluster's node.
 5. **deploy sample apps + loadgen**.
 6. **kube-prometheus-stack** (Prometheus, Alertmanager, kube-state-metrics,
@@ -177,7 +177,7 @@ It runs these steps in order, each with its own log file:
 12. **K8sGPT CR + LLM secret**: renders
     [`manifests/k8sgpt/k8sgpt-cr.yaml`](manifests/k8sgpt/k8sgpt-cr.yaml) from
     your settings, applies it, and restarts the operator.
-13. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
+13. **watcher**: builds `localhost/k8s-watcher:dev` from `../k8s-watcher`, loads it
     into the cluster's node and installs the `k8s-watcher` release in
     `k8sgpt-system` with [`helm/watcher-values.yaml`](helm/watcher-values.yaml).
 14. **pod smoke-test**: fails if a pod in the three namespaces is stuck

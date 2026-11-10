@@ -16,7 +16,7 @@ cm:
 
 image:
   # Built from k8s-watcher/ and `kind load`ed by scripts/up.sh; never pulled.
-  repository: k8s-watcher
+  repository: localhost/k8s-watcher
   tag: dev
   pullPolicy: Never
 

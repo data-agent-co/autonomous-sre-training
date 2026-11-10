@@ -78,8 +78,42 @@ kubeconfig_fix_hint() {
   esac
 }
 
-# load_images IMAGE...: copy local Docker images into the cluster's nodes.
+# container_cli ARGS...: run the container CLI CONTAINER_PLATFORM names
+# (docker, the default, or podman). Read on every call, so a value set in
+# .env by load_env applies.
+container_cli() {
+  if [[ "${CONTAINER_PLATFORM:-docker}" == "podman" ]]; then
+    command podman "$@"
+  else
+    command docker "$@"
+  fi
+}
+
+# check_container_platform: exit unless CONTAINER_PLATFORM is docker or
+# podman.
+check_container_platform() {
+  case "${CONTAINER_PLATFORM:-docker}" in
+    docker|podman) ;;
+    *) die "CONTAINER_PLATFORM must be docker or podman, not '$CONTAINER_PLATFORM'." ;;
+  esac
+}
+
+# load_images IMAGE...: copy local container images into the cluster's nodes.
 load_images() {
+  if [[ "${CONTAINER_PLATFORM:-docker}" == "podman" ]]; then
+    # kind load docker-image shells out to docker, so save the images to an
+    # archive instead.
+    local archive
+    archive="$(mktemp "${TMPDIR:-/tmp}/demo-images.XXXXXX")"
+    container_cli save -o "$archive" "$@" || { rm -f "$archive"; return 1; }
+    local rc=0
+    case "$CLUSTER_PROVIDER" in
+      kind) kind load image-archive "$archive" --name "$CLUSTER_NAME" || rc=$? ;;
+      k3d) k3d image import "$archive" --cluster "$CLUSTER_NAME" || rc=$? ;;
+    esac
+    rm -f "$archive"
+    return "$rc"
+  fi
   case "$CLUSTER_PROVIDER" in
     kind) kind load docker-image "$@" --name "$CLUSTER_NAME" ;;
     k3d) k3d image import "$@" --cluster "$CLUSTER_NAME" ;;

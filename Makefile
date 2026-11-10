@@ -10,7 +10,7 @@ SCRIPTS_DIR := demo-cluster/scripts
 DEMO_VALUES := demo-cluster/helm/watcher-values.yaml
 
 # The image, release and namespace the demo uses (see demo-cluster/scripts/up.sh).
-IMAGE        ?= k8s-watcher:dev
+IMAGE        ?= localhost/k8s-watcher:dev
 HELM_RELEASE := k8s-watcher
 HELM_NS      := k8sgpt-system
 
@@ -18,7 +18,10 @@ GO            ?= go
 GOLANGCI_LINT ?= golangci-lint
 HELM          ?= helm
 SHELLCHECK    ?= shellcheck
-DOCKER        ?= docker
+# Container CLI: CONTAINER_PLATFORM from the environment or demo-cluster/.env
+# (docker, the default, or podman).
+CONTAINER_PLATFORM ?= $(shell sed -n 's/^CONTAINER_PLATFORM=//p' demo-cluster/.env 2>/dev/null)
+DOCKER        ?= $(if $(filter podman,$(CONTAINER_PLATFORM)),podman,docker)
 
 GOVULNCHECK_VERSION ?= v1.8.0
 
@@ -98,7 +101,7 @@ shellcheck: ## Syntax-check (bash -n) and shellcheck the demo scripts
 	@cd $(SCRIPTS_DIR) && for f in *.sh; do bash -n "$$f" || exit 1; done; echo "bash -n: ok"
 	cd $(SCRIPTS_DIR) && $(SHELLCHECK) -x *.sh
 
-image: ## Build the watcher image (k8s-watcher:dev); never pushed
+image: ## Build the watcher image (localhost/k8s-watcher:dev); never pushed
 	$(DOCKER) build -t $(IMAGE) $(WATCHER_DIR)
 
 up: ## Create or update the kind demo cluster (demo-cluster/scripts/up.sh)

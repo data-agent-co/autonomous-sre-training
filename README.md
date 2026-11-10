@@ -21,7 +21,7 @@ The cluster runs on your laptop. An LLM and Slack are optional.
 
 | Tool | Minimum | Tested with |
 |---|---|---|
-| Docker (Desktop or Engine), running | 6 GB of memory for Docker | Docker Engine 29.8.1 (Docker Desktop) |
+| Docker or Podman (Desktop or Engine), running | 6 GB of memory for Docker or Podman virtual machine | Docker Engine 29.8.1 (Docker Desktop) or  Podman Desktop 1.30.5 |
 | [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) | v0.33.0 (for the pinned node image) | v0.33.0 |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | v1.36 (the cluster runs v1.37) | v1.37.1 |
 | [Helm](https://helm.sh/docs/intro/install/) | v3.8 (OCI charts); v4 for `helm test --logs` | v4.3.0 |
@@ -53,9 +53,11 @@ nothing goes to Slack.
 git clone https://github.com/data-agent-co/autonomous-sre-training.git
 cd autonomous-sre-training/demo-cluster
 
-cp .env.example .env    # optional: LLM key, Slack webhook (see below)
+cp .env.example .env    # optional: LLM key, Slack webhook, container platform (see below)
 ./scripts/up.sh
 ```
+
+The environment is built using Docker, by default. See the instructions below to use Podman instead.
 
 From the repository root, `make up` does the same (`make help` lists every
 target).
@@ -133,6 +135,19 @@ To have K8sGPT post each new Result to a channel, create a Slack
 channel you are allowed to post cluster findings to. Step-by-step setup:
 [demo-cluster/README.md](demo-cluster/README.md#slack-optional).
 
+## Using Podman
+
+The default container engine used by the tutorial for the kind cluster is Docker. Podman is also supported.
+
+Set the `CONTAINER_PLATFORM` variable in `.env` to `podman` to enable Podman support:
+
+```
+# ─── Container platform ───────────────────────────────────────────────
+# Container CLI the scripts build and load images with: docker (default)
+# or podman. 
+CONTAINER_PLATFORM=podman
+```
+
 ## Reset and teardown
 
 Run these from `demo-cluster/`:
@@ -173,7 +188,7 @@ from the repository root:
 
 ```bash
 make test       # go test -race in k8s-watcher/
-make image      # docker build -t k8s-watcher:dev k8s-watcher/
+make image      # docker build -t localhost/k8s-watcher:dev k8s-watcher/
 make helm-lint  # lint and render charts/k8s-watcher
 make ci         # every CI check; none needs a cluster
 ```

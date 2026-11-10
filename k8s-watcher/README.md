@@ -205,7 +205,7 @@ make build      # go build; binary in k8s-watcher/bin/watcher
 make test       # go test -race ./...
 make lint       # golangci-lint (config in .golangci.yml)
 make vuln       # govulncheck
-make image      # docker build -t k8s-watcher:dev k8s-watcher/
+make image      # docker build -t localhost/k8s-watcher:dev k8s-watcher/
 make ci         # every check CI runs; none needs a cluster
 ```
 

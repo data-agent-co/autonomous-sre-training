@@ -11,6 +11,7 @@
 # Environment:
 #   CLUSTER_NAME=demo-cluster  cluster to create or reuse
 #   CLUSTER_PROVIDER=kind      kind or k3d: the tool that runs the cluster
+#   CONTAINER_PLATFORM=docker  docker or podman: the container CLI to use
 #   PERSES_PORT=8080           local port for the Perses port-forward
 #   ENV_FILE=demo-cluster/.env settings file to load
 #   KIND_NODE_IMAGE=...        node image for a new kind cluster (empty = kind's
@@ -41,11 +42,16 @@ K8SGPT_VERSION="v0.4.39"
 load_env
 cd "$DEMO_DIR"
 
+: "${CONTAINER_PLATFORM:=docker}"
+check_container_platform
+
 NS_APPS="demo-apps"
 NS_MON="monitoring"
 NS_K8SGPT="k8sgpt-system"
 WATCHER_RELEASE="k8s-watcher"
-WATCHER_IMAGE="k8s-watcher:dev"
+# Local images are named localhost/NAME, as podman names them; the manifests
+# and helm/watcher-values.yaml use the same names.
+WATCHER_IMAGE="localhost/k8s-watcher:dev"
 # The chart names its Deployment k8s-watcher.fullname, which is the release name
 # when that already contains the chart name ("k8s-watcher").
 WATCHER_DEPLOY="$WATCHER_RELEASE"
@@ -100,13 +106,13 @@ fi
 
 # --- Prerequisites -----------------------------------------------------------
 missing=()
-for tool in docker "$CLUSTER_PROVIDER" kubectl helm curl; do
+for tool in "$CONTAINER_PLATFORM" "$CLUSTER_PROVIDER" kubectl helm curl; do
   command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
 done
 if [[ ${#missing[@]} -gt 0 ]]; then
   die "missing tools: ${missing[*]}"
 fi
-docker info >/dev/null 2>&1 || die "Docker is not running."
+container_cli info >/dev/null 2>&1 || die "$CONTAINER_PLATFORM is not running."
 
 # --- Progress helper ---------------------------------------------------------
 SPINNER_FRAMES='◐◓◑◒'
@@ -236,9 +242,9 @@ do_metrics_server() {
 }
 
 do_build_images() {
-  docker build -q -t payments-api:demo manifests/payments-api/
-  docker build -q -t recommend-svc:demo manifests/recommend-svc/
-  load_images payments-api:demo recommend-svc:demo
+  container_cli build -q -t localhost/payments-api:demo manifests/payments-api/
+  container_cli build -q -t localhost/recommend-svc:demo manifests/recommend-svc/
+  load_images localhost/payments-api:demo localhost/recommend-svc:demo
 }
 
 do_deploy_apps() {
@@ -451,7 +457,7 @@ do_k8sgpt() {
 }
 
 do_watcher() {
-  docker build -q -t "$WATCHER_IMAGE" "$REPO_ROOT/k8s-watcher"
+  container_cli build -q -t "$WATCHER_IMAGE" "$REPO_ROOT/k8s-watcher"
   load_images "$WATCHER_IMAGE"
 
   local upgrading=0

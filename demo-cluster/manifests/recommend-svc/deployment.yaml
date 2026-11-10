@@ -20,7 +20,7 @@ spec:
         # 1. Main app — clean HTTP service + Prometheus metrics.
         #    ZERO fault-injection code (moved to the leak-fixture sidecar).
         - name: recommend-svc
-          image: recommend-svc:demo
+          image: localhost/recommend-svc:demo
           imagePullPolicy: IfNotPresent
           command: ["python"]
           args: ["main.py"]
@@ -48,7 +48,7 @@ spec:
         #    128Mi limit → OOM ~30s after trigger-leak.sh (280 MB/min),
         #    ~6min after trigger-slowleak.sh (20 MB/min).
         - name: leak-fixture
-          image: recommend-svc:demo
+          image: localhost/recommend-svc:demo
           imagePullPolicy: IfNotPresent
           command: ["python"]
           args: ["leak.py"]
