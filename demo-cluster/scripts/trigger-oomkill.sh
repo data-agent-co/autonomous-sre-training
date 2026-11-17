@@ -63,6 +63,7 @@ oom_loop() {
 }
 
 stop() {
+  load_env
   if stop_pidfile "$OOM_LOOP_PIDFILE" "$OOM_LOOP_MATCH"; then
     echo "OOMKill loop stopped"
   else

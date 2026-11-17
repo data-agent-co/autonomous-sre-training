@@ -172,8 +172,17 @@ require_demo_cluster() {
 # load_env: export the settings in $ENV_FILE (default demo-cluster/.env).
 # A missing default .env is fine: Slack and the LLM are optional and every
 # other setting has a default.
+#
+# CLUSTER_NAME and CLUSTER_PROVIDER come from the shell only. This file has
+# already built KUBE_CONTEXT, STATE_DIR, PERSES_PF_MATCH and RUN_PREFIX from
+# them, so a different value in the settings file would leave kind and kubectl
+# acting on two different clusters. load_env stops instead of using it. The
+# error prints no command to paste: one rebuilt here could drop the user's own
+# prefix or arguments and act on a cluster they did not name.
 load_env() {
   local file="${ENV_FILE:-$DEMO_DIR/.env}"
+  local shell_cluster_name="$CLUSTER_NAME"
+  local shell_cluster_provider="$CLUSTER_PROVIDER"
   if [[ -f "$file" ]]; then
     set -a
     # shellcheck disable=SC1090
@@ -181,6 +190,16 @@ load_env() {
     set +a
   elif [[ -n "${ENV_FILE:-}" ]]; then
     die "ENV_FILE=$ENV_FILE not found"
+  fi
+  local mismatches=""
+  if [[ "$CLUSTER_NAME" != "$shell_cluster_name" ]]; then
+    mismatches+=" CLUSTER_NAME=$CLUSTER_NAME (your shell or the default says $shell_cluster_name)"
+  fi
+  if [[ "$CLUSTER_PROVIDER" != "$shell_cluster_provider" ]]; then
+    mismatches+="${mismatches:+ and} CLUSTER_PROVIDER=$CLUSTER_PROVIDER (your shell or the default says $shell_cluster_provider)"
+  fi
+  if [[ -n "$mismatches" ]]; then
+    die "$file sets$mismatches. These two settings are read from your shell only. Remove them from $file, then run your command again, putting them in front of it if you meant that cluster."
   fi
 }
 

@@ -109,7 +109,9 @@ K8sGPT writes Results without AI explanations and nothing goes to Slack.
 | `K8SGPT_LOCAL` | `false` | `true`: use a model served on your machine. No key needed (`LLM_API_KEY` is ignored); the backend is always `openai`, and `K8SGPT_BASE_URL` must be a local or private address. |
 | `SLACK_WEBHOOK_URL` | empty | Empty: no Slack. |
 
-These are read from your shell, not from `.env`:
+These are read from your shell. `CLUSTER_NAME` and `CLUSTER_PROVIDER` are
+read from your shell only: the scripts stop with an error if `.env` sets either
+to another value. `PERSES_PORT` and `KIND_NODE_IMAGE` can also be set in `.env`:
 
 | Variable | Default | Meaning |
 |---|---|---|
