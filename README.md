@@ -164,6 +164,10 @@ From the repository root, `make down` runs `down.sh`.
 cluster` (or `k3d cluster delete`). The tool also removes its context, so
 switch back to your usual one afterwards (`kubectl config use-context <name>`).
 
+## Next steps: connect the cluster to DataAgent
+
+K8sGPT tells you what broke. To see an autonomous SRE platform detect the same failures, run a root cause analysis and propose a remediation plan, connect this cluster to DataAgent's free trial by [following the steps here.](demo-cluster/docs/connect-dataagent/README.md)
+
 ## Repo layout
 
 ```
