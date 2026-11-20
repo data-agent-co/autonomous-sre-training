@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bring up the demo cluster end to end: a kind (or k3d) cluster with the
-# sample apps, kube-prometheus-stack (Prometheus + Alertmanager), Perses
-# dashboards, the K8sGPT operator and the watcher. Idempotent: safe to re-run against an existing
-# cluster.
+# sample apps, kube-prometheus-stack (Prometheus + Alertmanager), the demo
+# dashboard, Perses with the same panels, the K8sGPT operator and the
+# watcher. Idempotent: safe to re-run against an existing cluster.
 #
 # Settings come from demo-cluster/.env, which is optional (see .env.example):
 # without an LLM key K8sGPT runs without AI explanations, and without a
@@ -11,7 +11,8 @@
 # Environment:
 #   CLUSTER_NAME=demo-cluster  cluster to create or reuse
 #   CLUSTER_PROVIDER=kind      kind or k3d: the tool that runs the cluster
-#   PERSES_PORT=8080           local port for the Perses port-forward
+#   DASHBOARD_PORT=8080        local port for the demo dashboard port-forward
+#   PERSES_PORT=8081           local port for the Perses port-forward
 #   ENV_FILE=demo-cluster/.env settings file to load
 #   KIND_NODE_IMAGE=...        node image for a new kind cluster (empty = kind's
 #                              default); ignored with k3d
@@ -49,7 +50,13 @@ WATCHER_IMAGE="k8s-watcher:dev"
 # The chart names its Deployment k8s-watcher.fullname, which is the release name
 # when that already contains the chart name ("k8s-watcher").
 WATCHER_DEPLOY="$WATCHER_RELEASE"
-PERSES_PORT="${PERSES_PORT:-8080}"
+DASHBOARD_IMAGE="demo-dashboard:demo"
+DASHBOARD_DEPLOY="demo-dashboard"
+DASHBOARD_PORT="${DASHBOARD_PORT:-$DASHBOARD_PORT_DEFAULT}"
+PERSES_PORT="${PERSES_PORT:-$PERSES_PORT_DEFAULT}"
+if [[ "$DASHBOARD_PORT" == "$PERSES_PORT" ]]; then
+  die "DASHBOARD_PORT and PERSES_PORT are both $DASHBOARD_PORT. Give each its own port."
+fi
 
 : "${LLM_API_KEY:=}"
 : "${SLACK_WEBHOOK_URL:=}"
@@ -184,7 +191,7 @@ run_step() {
   tail -20 "$logfile" | sed 's/^/      /'
   echo
   if [[ "$mode" != "optional" ]]; then
-    echo "Setup stopped at \"$label\" (exit $rc). Fix the cause and re-run ${RUN_PREFIX}./scripts/up.sh." >&2
+    echo "Setup stopped at \"$label\" (exit $rc). Fix the cause and re-run $(up_prefix)./scripts/up.sh." >&2
     exit "$rc"
   fi
 }
@@ -347,6 +354,27 @@ wait_dashboard_loaded() {
   return 1
 }
 
+do_demo_dashboard() {
+  docker build -q -t "$DASHBOARD_IMAGE" dashboard/
+  load_images "$DASHBOARD_IMAGE"
+  demo_kubectl apply -f dashboard/deployment.yaml
+
+  # The image is rebuilt under the same tag, so the manifest never changes
+  # and the pod would keep serving the page of an older image. Stamp the pod
+  # template with a checksum of what the image holds (its layers and its
+  # config): the pod is replaced when the image changed, and only then. The
+  # image ID would not do: with Docker's containerd image store it differed
+  # on every build of the same sources. kubectl apply leaves the stamp alone
+  # on the next run, because the manifest does not have it. On a new cluster
+  # the stamp replaces the pod that apply created a moment earlier.
+  local hash patch
+  hash="$(docker image inspect -f '{{json .RootFS.Layers}} {{json .Config}}' "$DASHBOARD_IMAGE" \
+    | cksum | awk '{print $1}')"
+  patch="$(printf '{"spec":{"template":{"metadata":{"annotations":{"sre-training/image-hash":"%s"}}}}}' "$hash")"
+  demo_kubectl -n "$NS_MON" patch deploy "$DASHBOARD_DEPLOY" --type=merge -p "$patch"
+  demo_kubectl -n "$NS_MON" rollout status "deploy/$DASHBOARD_DEPLOY" --timeout=120s
+}
+
 do_k8sgpt_operator() {
   demo_helm upgrade --install k8sgpt-operator k8sgpt-operator \
     --repo https://charts.k8sgpt.ai \
@@ -471,6 +499,10 @@ do_watcher() {
   fi
 }
 
+do_demo_dashboard_port_forward() {
+  DASHBOARD_PORT="$DASHBOARD_PORT" "$SCRIPT_DIR/dashboard.sh"
+}
+
 do_perses_port_forward() {
   PERSES_PORT="$PERSES_PORT" "$SCRIPT_DIR/perses.sh"
 }
@@ -499,6 +531,7 @@ step "kube-prometheus-stack"          do_prometheus_stack
 step "ServiceMonitors"                do_servicemonitors
 step "Perses"                         do_perses
 step "Perses dashboard"               do_dashboard
+step "demo dashboard"                 do_demo_dashboard
 step "K8sGPT operator"                do_k8sgpt_operator
 if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
   step "Slack relay + probe"          do_slack
@@ -509,17 +542,33 @@ step "K8sGPT CR + LLM secret"         do_k8sgpt
 step "watcher"                        do_watcher
 step "pod smoke-test"                 do_smoke_test
 
-optional_step "Perses port-forward"   do_perses_port_forward
+# Both port-forwards are replaced. Stop both before starting either: one may
+# still hold the port the other is about to use (Perses was on 8080 before
+# the demo dashboard took that port).
+stop_pidfile "$DASHBOARD_PF_PIDFILE" "$DASHBOARD_PF_MATCH" || true
+stop_pidfile "$PERSES_PF_PIDFILE" "$PERSES_PF_MATCH" || true
+optional_step "demo dashboard port-forward"  do_demo_dashboard_port_forward
+optional_step "Perses port-forward"          do_perses_port_forward
 
 KC="kubectl --context $KUBE_CONTEXT"
 RUN="$RUN_PREFIX"
+DASHBOARD_RUN="$RUN"
+if [[ "$DASHBOARD_PORT" != "$DASHBOARD_PORT_DEFAULT" ]]; then
+  DASHBOARD_RUN+="DASHBOARD_PORT=$DASHBOARD_PORT "
+fi
 PERSES_RUN="$RUN"
-if [[ "$PERSES_PORT" != "8080" ]]; then
+if [[ "$PERSES_PORT" != "$PERSES_PORT_DEFAULT" ]]; then
   PERSES_RUN+="PERSES_PORT=$PERSES_PORT "
 fi
 VERIFY="  $KC get pods -A"
 if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
   VERIFY+=$'\n  ./scripts/check-slack.sh'
+fi
+DASHBOARD_URL="http://localhost:${DASHBOARD_PORT}"
+if pidfile_alive "$DASHBOARD_PF_PIDFILE" "$DASHBOARD_PF_MATCH"; then
+  DASHBOARD_STATUS="port-forwarded in the background:"
+else
+  DASHBOARD_STATUS="not port-forwarded (see the WARN above). Start it with ${DASHBOARD_RUN}./scripts/dashboard.sh, then open:"
 fi
 PERSES_URL="http://localhost:${PERSES_PORT}/projects/demo-cluster/dashboards/demo-cluster-overview"
 if pidfile_alive "$PERSES_PF_PIDFILE" "$PERSES_PF_MATCH"; then
@@ -550,7 +599,12 @@ See what K8sGPT and the watcher found:
   $KC -n $NS_K8SGPT get results
   $KC -n $NS_K8SGPT get results -o yaml
 
-Perses is $PERSES_STATUS
+The demo dashboard is $DASHBOARD_STATUS
+  $DASHBOARD_URL  (no login)
+  Restart the port-forward: ${DASHBOARD_RUN}./scripts/dashboard.sh
+  Stop it:                  ${RUN}./scripts/dashboard.sh --stop
+
+Perses, with the same panels, is $PERSES_STATUS
   $PERSES_URL  (no login)
   Restart the port-forward: ${PERSES_RUN}./scripts/perses.sh
   Stop it:                  ${RUN}./scripts/perses.sh --stop

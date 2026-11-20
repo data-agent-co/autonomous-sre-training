@@ -1,0 +1,930 @@
+{
+  "version": 1,
+  "title": "Demo Cluster: Fault Detection & Handling",
+  "description": "Live topology of the demo apps, cluster health, golden signals per service and K8sGPT activity. Same queries as the Perses dashboard.",
+  "range": "2m",
+  "refresh": "5s",
+  "minStep": "5s",
+  "palette": {
+    "payments-api": 1,
+    "recommend-svc": 2,
+    "catalog-svc": 3,
+    "nginx": 3,
+    "loadgen": 4,
+    "leak-fixture": 5
+  },
+  "topology": {
+    "title": "Demo apps",
+    "namespace": "demo-apps",
+    "source": {
+      "id": "loadgen",
+      "label": "Traffic",
+      "sub": "loadgen",
+      "icon": "traffic",
+      "ready": "max(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"loadgen-.*\", condition=\"true\"}) or max(kube_deployment_spec_replicas{namespace=\"demo-apps\", deployment=\"loadgen\"}) * 0"
+    },
+    "nodes": [
+      {
+        "id": "payments-api",
+        "label": "payments-api",
+        "sub": "Go · 128Mi",
+        "icon": "payments",
+        "ready": "max(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"payments-api-.*\", condition=\"true\"})",
+        "waiting": "kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\"} == 1",
+        "oomKilledNow": "kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\", reason=\"OOMKilled\"} == 1",
+        "oomKilled": "(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\", reason=\"OOMKilled\"} == 1) and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[2m]) > 0)",
+        "memory": "max(container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"payments-api-.*\", container!=\"\", container!=\"POD\"} / on(namespace, pod, container) group_left kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"} * 100)",
+        "restarts": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\", pod=~\"payments-api-.*\"}[5m]))",
+        "traffic": {
+          "rate": "(sum(rate(payments_api_http_requests_total{path!=\"/metrics\"}[1m])) and on() (max(max_over_time(up{job=\"payments-api\"}[15s])) == 1)) or on() vector(0)",
+          "errors": "(sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) * 100) or vector(0)"
+        },
+        "ports": [
+          "metrics",
+          "scan"
+        ],
+        "metricsUp": "max(up{job=\"payments-api\"})",
+        "fault": {
+          "badge": "F1",
+          "name": "OOMKill",
+          "active": "((count(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\", reason=\"CrashLoopBackOff\"} == 1)) or vector(0)) + ((count((kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\", reason=\"OOMKilled\"} == 1) and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[2m]) > 0))) or vector(0)) + ((count(kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", pod=~\"payments-api-.*\", reason=\"OOMKilled\"} == 1)) or vector(0))",
+          "trigger": "./scripts/trigger-oomkill.sh"
+        }
+      },
+      {
+        "id": "recommend-svc",
+        "label": "recommend-svc",
+        "sub": "Python · 128Mi + sidecar",
+        "icon": "recommend",
+        "ready": "max(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\", condition=\"true\"})",
+        "waiting": "kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\"} == 1",
+        "oomKilledNow": "kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\", reason=\"OOMKilled\"} == 1",
+        "oomKilled": "(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\", reason=\"OOMKilled\"} == 1) and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[2m]) > 0)",
+        "memory": "max(container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\", container!=\"\", container!=\"POD\"} / on(namespace, pod, container) group_left kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"} * 100)",
+        "restarts": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\", pod=~\"recommend-svc-.*\"}[5m]))",
+        "traffic": {
+          "rate": "(sum(rate(recommend_svc_http_requests_total{path!=\"/metrics\"}[1m])) and on() (max(max_over_time(up{job=\"recommend-svc\"}[15s])) == 1)) or on() vector(0)",
+          "errors": "(sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) * 100) or vector(0)"
+        },
+        "ports": [
+          "metrics",
+          "scan"
+        ],
+        "metricsUp": "max(up{job=\"recommend-svc\"})",
+        "fault": {
+          "badge": "F2",
+          "name": "memory leak",
+          "active": "((max(container_memory_working_set_bytes{namespace=\"demo-apps\", container=\"leak-fixture\"} / on(namespace, pod, container) group_left kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"} * 100) >= bool 20) or vector(0)) + ((count((kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", container=\"leak-fixture\", reason=\"OOMKilled\"} == 1) and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[2m]) > 0))) or vector(0)) + ((count(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", container=\"leak-fixture\", reason=\"CrashLoopBackOff\"} == 1)) or vector(0)) + ((count(kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", container=\"leak-fixture\", reason=\"OOMKilled\"} == 1)) or vector(0))",
+          "trigger": "./scripts/trigger-slowleak.sh"
+        }
+      },
+      {
+        "id": "catalog-svc",
+        "label": "catalog-svc",
+        "sub": "nginx · 64Mi",
+        "icon": "catalog",
+        "ready": "max(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", condition=\"true\"})",
+        "waiting": "kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\"} == 1",
+        "oomKilledNow": "kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", reason=\"OOMKilled\"} == 1",
+        "oomKilled": "(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", reason=\"OOMKilled\"} == 1) and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[2m]) > 0)",
+        "memory": "max(container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", container!=\"\", container!=\"POD\"} / on(namespace, pod, container) group_left kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"} * 100)",
+        "restarts": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\"}[5m]))",
+        "ports": [
+          "scan"
+        ]
+      }
+    ],
+    "ports": {
+      "metrics": {
+        "legend": "Prometheus scrapes /metrics every 5s"
+      },
+      "scan": {
+        "legend": "K8sGPT scans the pods about every 30s",
+        "up": "(count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"} > 0) or count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"}) * 0) == bool 2"
+      }
+    },
+    "notes": "### Sample apps in the `demo-apps` namespace\n\n| App | Stack | Limit | /metrics | Role | Fault trigger |\n|---|---|---|---|---|---|\n| `payments-api` | Go | 128Mi | yes | **OOMKill victim** (F1) | `./scripts/trigger-oomkill.sh` allocates past the limit in the running container after every restart, until CrashLoopBackOff |\n| `recommend-svc` | Python | 128Mi + 128Mi `leak-fixture` sidecar | yes | **Slow-leak victim** (F2) | `./scripts/trigger-slowleak.sh` makes the sidecar's memory climb 20 MB/min until it is OOMKilled (invisible to K8sGPT until then) |\n| `catalog-svc` | nginx | 64Mi | no | **Healthy control** | none: no traffic, always green |\n| `loadgen` | curl | 32Mi | no | **Traffic generator** | runs continuously, about 2 req/sec each to payments-api and recommend-svc `/healthz` |\n\n### Detection layers\n\n- **Golden signals (L, T, E, S)**: the Throughput, Latency, Errors and Saturation panels show signs of a fault *regardless of root cause*. The Composite Health Score combines them into one 0-100 number.\n- **K8sGPT** (`k8sgpt-system`) scans the `demo-apps` Pods and writes a Result per finding (`kubectl get results -n k8sgpt-system`). With an LLM configured it adds an AI explanation; with a Slack webhook it posts each new Result.\n- **watcher** (`k8sgpt-system`) writes a Result when a ConfigMap labelled `k8sgpt-detection-pack.io/critical=true` is created, changed or deleted.\n\n### Observability in the `monitoring` namespace\n\n- **kube-prometheus-stack**: Prometheus (6h retention), Alertmanager, kube-state-metrics and node-exporter. App `/metrics` is scraped through a **ServiceMonitor** per app.\n- **demo-dashboard**: this page. The panels and the topology are defined in `demo-cluster/dashboard/web/dashboard.json`.\n- **Perses** shows the same panels from `demo-cluster/perses/demo-cluster-overview.json`."
+  },
+  "panels": [
+    {
+      "id": "apps_healthy",
+      "title": "Demo apps healthy",
+      "description": "Number of pods in demo-apps currently Ready",
+      "kind": "stat",
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "decimal",
+      "thresholds": {
+        "base": "critical",
+        "steps": [
+          {
+            "from": 1,
+            "tone": "warning"
+          },
+          {
+            "from": 3,
+            "tone": "good"
+          }
+        ]
+      },
+      "sparkline": false,
+      "label": true,
+      "queries": [
+        {
+          "expr": "sum(kube_pod_status_ready{namespace=\"demo-apps\", condition=\"true\"} == 1) or vector(0)",
+          "legend": "ready"
+        }
+      ]
+    },
+    {
+      "id": "crashloop",
+      "title": "CrashLoopBackOff",
+      "description": "Containers in CrashLoopBackOff in the last minute. The minute smooths over the few seconds the container runs between two crashes, when it is not waiting. Falls back to 0, so a healthy cluster shows a green 0 instead of No data.",
+      "kind": "stat",
+      "grid": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "decimal",
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 1,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": true,
+      "queries": [
+        {
+          "expr": "sum(max by (namespace, pod, container) (max_over_time(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"}[1m]) == 1) and on (namespace, pod) kube_pod_info{namespace=\"demo-apps\"}) or vector(0)",
+          "legend": "pods"
+        }
+      ]
+    },
+    {
+      "id": "oomkills",
+      "title": "OOMKills (last 5m)",
+      "description": "Container restarts in the last 5 minutes whose last termination was an OOMKill. Uses last_terminated_reason, which stays set after the container restarts, so every kill counts, also one that restarted at once. Rounded, because increase() extrapolates.",
+      "kind": "stat",
+      "grid": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "decimal",
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 1,
+            "tone": "warning"
+          },
+          {
+            "from": 3,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": true,
+      "queries": [
+        {
+          "expr": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]) and on (namespace, pod, container) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) == 1))) or vector(0)",
+          "legend": "kills"
+        }
+      ]
+    },
+    {
+      "id": "restarts",
+      "title": "Restarts (last 5m)",
+      "description": "Container restarts in demo-apps in the last 5 minutes. Rounded, because increase() extrapolates.",
+      "kind": "stat",
+      "grid": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "decimal",
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 1,
+            "tone": "warning"
+          },
+          {
+            "from": 3,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": true,
+      "queries": [
+        {
+          "expr": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]))) or on() vector(0)",
+          "legend": "restarts"
+        }
+      ]
+    },
+    {
+      "id": "health_score",
+      "title": "Composite Health Score (0-100, lower = worse)",
+      "description": "Aggregate health score, 0-100 (higher = healthier). Formula (each term is subtracted independently, so multiple hits stack):\n  100 (baseline)\n  −50 · CrashLoopBackOff on any demo-apps container (in the last minute)\n  −20 · memory working-set > 50% of limit (any container)\n  −30 · memory working-set > 80% of limit (any container)\n  −30 · payments-api HTTP 5xx rate > 1% (1m window)\n  −30 · recommend-svc HTTP 5xx rate > 1% (1m window)\n  −50 · any demo-apps pod not Ready (payments-api / recommend-svc / catalog-svc)\n  −30 · any OOMKill in demo-apps in the last 5 minutes\n\nColour bands:\n  ≥ 80 = OK\n  50–79 = Warning\n  < 50 = Critical\n\nThe whole point of this panel: detect any of the demo's faults\nwithout knowing the root cause. When it turns red, drill down to the\nLTES row below to see which golden signal is affected.",
+      "kind": "stat",
+      "grid": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 4
+      },
+      "unit": "decimal",
+      "decimals": 0,
+      "thresholds": {
+        "base": "critical",
+        "steps": [
+          {
+            "from": 50,
+            "tone": "warning"
+          },
+          {
+            "from": 80,
+            "tone": "good"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": true,
+      "queries": [
+        {
+          "expr": "clamp_min(100 - (((sum(max by (namespace, pod, container) (max_over_time(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"}[1m]) == 1) and on (namespace, pod) kube_pod_info{namespace=\"demo-apps\"}) or vector(0)) > bool 0) * 50) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.5) * 20) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.8) * 30) - (((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((min(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", condition=\"true\"}) or vector(1)) < bool 1) * 50) - (((sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]) and on (namespace, pod, container) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) == 1)) or vector(0)) > bool 0) * 30), 0)",
+          "legend": "health"
+        }
+      ],
+      "hero": true
+    },
+    {
+      "id": "throughput",
+      "title": "Throughput — req/sec (T)",
+      "description": "Golden signal T: rate of HTTP requests per second, per service. Generated by the loadgen pod. Drops to 0 while the service's scrape target is down.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 9
+      },
+      "unit": "requests/sec",
+      "min": 0,
+      "draw": "line",
+      "connectNulls": false,
+      "legend": {
+        "position": "bottom",
+        "values": [
+          "last",
+          "mean"
+        ]
+      },
+      "queries": [
+        {
+          "expr": "(sum(rate(payments_api_http_requests_total[1m])) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+          "legend": "payments-api"
+        },
+        {
+          "expr": "(sum(rate(recommend_svc_http_requests_total[1m])) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+          "legend": "recommend-svc"
+        }
+      ]
+    },
+    {
+      "id": "latency",
+      "title": "Latency p95 — ms (L)",
+      "description": "Golden signal L: 95th percentile request latency, per service. Spikes during load saturation and during fault recovery cycles. Drops to 0 while the service's scrape target is down.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 9
+      },
+      "unit": "milliseconds",
+      "min": 0,
+      "draw": "line",
+      "connectNulls": false,
+      "legend": {
+        "position": "bottom",
+        "values": [
+          "last",
+          "max"
+        ]
+      },
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 100,
+            "tone": "warning"
+          },
+          {
+            "from": 500,
+            "tone": "critical"
+          }
+        ]
+      },
+      "queries": [
+        {
+          "expr": "((histogram_quantile(0.95, sum by (le) (rate(payments_api_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"payments-api\"}) == 1)) or on() vector(0)",
+          "legend": "payments-api"
+        },
+        {
+          "expr": "((histogram_quantile(0.95, sum by (le) (rate(recommend_svc_http_request_duration_seconds_bucket[1m]))) * 1000) and on() (avg(up{job=\"recommend-svc\"}) == 1)) or on() vector(0)",
+          "legend": "recommend-svc"
+        }
+      ]
+    },
+    {
+      "id": "errors",
+      "title": "Service errors — % (E)",
+      "description": "Golden signal E. Combines two failure modes: (a) HTTP 5xx responses emitted by the app itself, and (b) Prometheus scrape unavailability (`up == 0`) — the only signal that catches OOMKill / CrashLoop / pod-down faults where the server never gets a chance to emit a 5xx because the connection is refused. catalog-svc uses kube_pod_status_ready since it has no /metrics endpoint. 100% means target was unreachable for the entire window.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 9
+      },
+      "unit": "percent",
+      "min": 0,
+      "max": 100,
+      "draw": "line",
+      "connectNulls": false,
+      "legend": {
+        "position": "bottom",
+        "values": [
+          "last",
+          "max"
+        ]
+      },
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 1,
+            "tone": "warning"
+          },
+          {
+            "from": 5,
+            "tone": "critical"
+          }
+        ]
+      },
+      "queries": [
+        {
+          "expr": "((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"payments-api\"}[1m])) or vector(1))) * 100",
+          "legend": "payments-api"
+        },
+        {
+          "expr": "((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001)) or vector(0)) * 100 + (1 - (avg(avg_over_time(up{job=\"recommend-svc\"}[1m])) or vector(1))) * 100",
+          "legend": "recommend-svc"
+        },
+        {
+          "expr": "(1 - (avg(avg_over_time(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"catalog-svc-.*\", condition=\"true\"}[1m])) or vector(1))) * 100",
+          "legend": "catalog-svc"
+        }
+      ]
+    },
+    {
+      "id": "saturation",
+      "title": "Saturation — memory % of limit (S)",
+      "description": "Golden signal S: each container's memory working set as % of its memory limit (top 6, running pods only). Memory only: it is the resource every demo fault exhausts. A container OOMKilled in the last minute shows as 100%: memory is sampled about every 15 s, so the sample at the moment of the kill is usually missed. The red dashed line is the 100% limit; it is always drawn, so the y-axis always reaches 100%.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 9
+      },
+      "unit": "percent",
+      "min": 0,
+      "draw": "line",
+      "connectNulls": false,
+      "legend": {
+        "position": "bottom",
+        "values": [
+          "last",
+          "max"
+        ]
+      },
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 50,
+            "tone": "warning"
+          },
+          {
+            "from": 80,
+            "tone": "critical"
+          }
+        ]
+      },
+      "queries": [
+        {
+          "expr": "topk(6, (max by (namespace, pod, container) (  container_memory_working_set_bytes{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", container!=\"\", container!=\"POD\"}   / on(namespace, pod, container) group_left   kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"}   * 100  or 100 * (kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", reason=\"OOMKilled\"} == 1)   and on(namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m]) > 0)) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1)))",
+          "legend": "{{container}} @ {{pod}}"
+        },
+        {
+          "expr": "vector(100)",
+          "legend": "limit",
+          "color": "critical",
+          "dash": true,
+          "fill": 0
+        }
+      ]
+    },
+    {
+      "id": "restart_rate",
+      "title": "Restart rate per pod (5m window)",
+      "description": "Restarts per second over 5 minutes. A 5-minute window covers the kubelet's back-off between crashes (up to 5 minutes), so a crash loop does not drop to 0 between restarts.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "unit": "ops/sec",
+      "draw": "line",
+      "connectNulls": true,
+      "legend": {
+        "position": "right",
+        "values": [
+          "last",
+          "max"
+        ]
+      },
+      "queries": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (rate(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "legend": "{{container}} @ {{pod}}"
+        }
+      ]
+    },
+    {
+      "id": "restart_events",
+      "title": "Container restart events",
+      "description": "One bar per container restart, at the point it happened: the restart count minus its value one step ($__interval) earlier. A fixed 1-minute window would draw the same restart at every point of that minute.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "unit": "decimal",
+      "draw": "bars",
+      "connectNulls": false,
+      "legend": {
+        "position": "right"
+      },
+      "queries": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}) - sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"} offset $__interval)) > 0 or 0 * sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}))",
+          "legend": "{{container}} @ {{pod}}"
+        }
+      ]
+    },
+    {
+      "id": "restarts_over_time",
+      "title": "Container restarts over time",
+      "description": "Restart count per pod. Climbing here means CrashLoopBackOff — the signal K8sGPT's Pod analyzer flags.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 0,
+        "y": 25,
+        "w": 16,
+        "h": 10
+      },
+      "unit": "decimal",
+      "draw": "line",
+      "connectNulls": false,
+      "legend": {
+        "position": "right",
+        "values": [
+          "last"
+        ]
+      },
+      "queries": [
+        {
+          "expr": "topk(6, (sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "legend": "{{container}} @ {{pod}}"
+        }
+      ]
+    },
+    {
+      "id": "fault_states",
+      "title": "Active fault states",
+      "description": "Containers in demo-apps currently in a waiting state (CrashLoopBackOff / ImagePullBackOff / ErrImagePull / ContainerCreating). When the cluster is healthy it shows a single \"All containers running\" row (a fallback series the query adds only when nothing is waiting) — that's the goal state. During a fault the table populates with one row per affected pod, marked by reason. These are exactly the events K8sGPT's Pod analyzer flags.",
+      "kind": "table",
+      "grid": {
+        "x": 16,
+        "y": 25,
+        "w": 8,
+        "h": 5
+      },
+      "columns": [
+        {
+          "label": "pod",
+          "header": "Pod",
+          "width": 200,
+          "map": [
+            {
+              "match": "all-running",
+              "text": "All containers running",
+              "tone": "good"
+            }
+          ]
+        },
+        {
+          "label": "container",
+          "header": "Container",
+          "width": 110
+        },
+        {
+          "label": "reason",
+          "header": "Reason",
+          "map": [
+            {
+              "match": "CrashLoopBackOff",
+              "text": "CrashLoopBackOff",
+              "tone": "critical"
+            },
+            {
+              "match": "ImagePullBackOff",
+              "text": "ImagePullBackOff",
+              "tone": "critical"
+            },
+            {
+              "match": "ErrImagePull",
+              "text": "ErrImagePull",
+              "tone": "critical"
+            },
+            {
+              "match": "ContainerCreating",
+              "text": "ContainerCreating",
+              "tone": "warning"
+            }
+          ]
+        }
+      ],
+      "queries": [
+        {
+          "expr": "(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\"} == 1) or on() label_replace(vector(0), \"pod\", \"all-running\", \"\", \"\")",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": "detections",
+      "title": "K8sGPT new Results",
+      "description": "One bar each time K8sGPT creates a Result (and, with Slack on, posts it): the Results that exist now but did not one step ($__interval) earlier. Source: k8sgpt_result_info, which kube-state-metrics exports from the Result objects themselves. The operator's own k8sgpt_number_of_results gauge is not used: it never goes back to 0 after the Results are deleted.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 16,
+        "y": 30,
+        "w": 8,
+        "h": 5
+      },
+      "unit": "decimal",
+      "min": 0,
+      "draw": "bars",
+      "connectNulls": false,
+      "queries": [
+        {
+          "expr": "sum(count by (name) (k8sgpt_result_info unless on (name) (k8sgpt_result_info offset $__interval))) or on() vector(0)",
+          "legend": "new Results"
+        }
+      ]
+    },
+    {
+      "id": "memory_growth",
+      "title": "Memory growth rate (per pod, 2m window)",
+      "description": "rate() of container_memory_working_set_bytes — the SLOPE of the memory line, in bytes/sec. The cleanest live signal of a slow leak: visible at any absolute memory level. Negative values during OOM cycles are kernel reclaim, not anomalies. Thresholds: yellow ≥ 100 KB/s (~6 MB/min), red ≥ 500 KB/s (~30 MB/min).",
+      "kind": "timeseries",
+      "grid": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 8
+      },
+      "unit": "bytes/sec",
+      "draw": "line",
+      "connectNulls": true,
+      "legend": {
+        "position": "right",
+        "values": [
+          "last",
+          "max"
+        ]
+      },
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 100000,
+            "tone": "warning"
+          },
+          {
+            "from": 500000,
+            "tone": "critical"
+          }
+        ]
+      },
+      "queries": [
+        {
+          "expr": "topk(6, (deriv(sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"})[2m:15s]) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+          "legend": "{{container}} @ {{pod}}"
+        }
+      ]
+    },
+    {
+      "id": "diagnoses",
+      "title": "K8sGPT diagnoses by Kind",
+      "description": "The K8sGPT Result objects that exist now, one row each: the Kind and resource K8sGPT flagged and the LLM backend that explained it. Source: k8sgpt_result_info from kube-state-metrics. With Slack on, the last row shows whether the Slack webhook is reachable.",
+      "kind": "table",
+      "grid": {
+        "x": 0,
+        "y": 43,
+        "w": 8,
+        "h": 8
+      },
+      "columns": [
+        {
+          "label": "kind",
+          "header": "Kind",
+          "width": 90
+        },
+        {
+          "label": "object",
+          "header": "Resource"
+        },
+        {
+          "label": "backend",
+          "header": "LLM",
+          "width": 80
+        },
+        {
+          "label": "status",
+          "header": "Status",
+          "width": 100,
+          "map": [
+            {
+              "match": "found",
+              "text": "found",
+              "tone": "warning"
+            },
+            {
+              "match": "reachable",
+              "text": "reachable",
+              "tone": "good"
+            },
+            {
+              "match": "unreachable",
+              "text": "unreachable",
+              "tone": "critical"
+            }
+          ]
+        }
+      ],
+      "queries": [
+        {
+          "expr": "label_replace(k8sgpt_result_info, \"status\", \"found\", \"\", \"\") or label_replace(label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"} == 1, \"kind\", \"Slack sink\", \"\", \"\"), \"object\", \"incidents-demo (webhook)\", \"\", \"\"), \"backend\", \"—\", \"\", \"\"), \"status\", \"reachable\", \"\", \"\") or label_replace(label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"} == 0, \"kind\", \"Slack sink\", \"\", \"\"), \"object\", \"incidents-demo (webhook)\", \"\", \"\"), \"backend\", \"—\", \"\", \"\"), \"status\", \"unreachable\", \"\", \"\")",
+          "instant": true
+        }
+      ],
+      "empty": "No K8sGPT findings"
+    },
+    {
+      "id": "llm_calls",
+      "title": "LLM calls — errors + latency",
+      "description": "Two correlated signals for the K8sGPT → LLM path, one plot each, on a shared time axis:\n• Errors (top plot, ops/sec) — failed LLM calls and reconcile errors averaged over 5m. Spikes during rate-limiting, auth failures, or network issues to the provider.\n• Avg latency (bottom plot, seconds) — mean reconcile duration from controller_runtime_reconcile_time_seconds. The LLM round-trip dominates this, so it's effectively the LLM call latency. Healthy is a few seconds or less on a small hosted model; climbing latency without errors usually means the model is throttled but still serving.\nWatching both together reveals the failure mode: errors spike + latency steady = hard rejection (429/auth); latency climbs first then errors = the LLM is dying slowly.",
+      "kind": "timeseries",
+      "grid": {
+        "x": 8,
+        "y": 43,
+        "w": 8,
+        "h": 8
+      },
+      "unit": "ops/sec",
+      "min": 0,
+      "draw": "line",
+      "connectNulls": true,
+      "legend": {
+        "position": "bottom"
+      },
+      "queries": [
+        {
+          "expr": "sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or on() vector(0)",
+          "legend": "failed LLM calls / sec",
+          "color": 8
+        },
+        {
+          "expr": "sum(rate(k8sgpt_reconcile_error_count[5m])) or on() vector(0)",
+          "legend": "reconcile errors / sec",
+          "color": 7
+        },
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+          "legend": "avg latency",
+          "color": 6,
+          "unit": "seconds"
+        }
+      ]
+    },
+    {
+      "id": "agent_health",
+      "title": "K8sGPT agent — Health",
+      "description": "Composite 0-100 score for the K8sGPT agent. 100 = no errors. Subtracts 50 when any LLM call failed in the last 5 minutes and 50 when any reconcile failed, so an unreachable LLM (both) reads 0. A rate threshold cannot work here: K8sGPT reconciles about every 30 seconds, so even when every reconcile fails the error rate stays near 0.03/s. The agent's own watchdog, separate from the cluster's health.",
+      "kind": "stat",
+      "grid": {
+        "x": 16,
+        "y": 43,
+        "w": 8,
+        "h": 8
+      },
+      "unit": "decimal",
+      "thresholds": {
+        "base": "critical",
+        "steps": [
+          {
+            "from": 50,
+            "tone": "warning"
+          },
+          {
+            "from": 80,
+            "tone": "good"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": false,
+      "queries": [
+        {
+          "expr": "clamp_min(100 - 50 * ((sum(increase(k8sgpt_number_of_failed_backend_ai_calls[5m])) > bool 0) or vector(0)) - 50 * ((sum(increase(k8sgpt_reconcile_error_count[5m])) > bool 0) or vector(0)), 0)",
+          "legend": "Health"
+        }
+      ]
+    },
+    {
+      "id": "agent_reconciles",
+      "title": "K8sGPT agent — Reconciles/s",
+      "description": "Throughput. A 'reconcile' is one iteration of the K8sGPT controller's main work loop — it wakes up when a watched resource changes (or on a periodic tick), scans the cluster, calls the LLM (when configured), writes Result CRDs, and posts to Slack (when configured). This is the rate of those iterations per second. In this cluster the operator reconciles about every 30 seconds, so a working agent reads about 0.03 per second. 0 means it did not reconcile in the last 5 minutes: the tile then reads Idle (blue, not red). Only worry if it's still 0 during an active fault. Source: controller_runtime_reconcile_total{controller=\"k8sgpt\"}.",
+      "kind": "stat",
+      "grid": {
+        "x": 0,
+        "y": 51,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "ops/sec",
+      "decimals": 2,
+      "thresholds": {
+        "base": "info",
+        "steps": [
+          {
+            "from": 0.001,
+            "tone": "good"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": false,
+      "queries": [
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_total{controller=\"k8sgpt\"}[5m]))) or on() vector(0)",
+          "legend": "Reconciles/s"
+        }
+      ]
+    },
+    {
+      "id": "agent_latency",
+      "title": "K8sGPT agent — Avg latency",
+      "description": "Latency. Average duration of a single reconcile, in seconds. Mostly dominated by the LLM round-trip — slow LLM = climbing latency here. Healthy is a few seconds or less on a small hosted model; far longer usually means the provider is rate-limiting or the model is overloaded. 0 during idle just means no recent reconciles to measure (shown as blue, not green — green would imply 'fast', but there's nothing to be fast at). Source: controller_runtime_reconcile_time_seconds_sum / count.",
+      "kind": "stat",
+      "grid": {
+        "x": 6,
+        "y": 51,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "seconds",
+      "decimals": 2,
+      "thresholds": {
+        "base": "info",
+        "steps": [
+          {
+            "from": 0.001,
+            "tone": "good"
+          },
+          {
+            "from": 0.5,
+            "tone": "warning"
+          },
+          {
+            "from": 2,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": false,
+      "queries": [
+        {
+          "expr": "(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[5m])) / clamp_min(sum(rate(controller_runtime_reconcile_time_seconds_count{controller=\"k8sgpt\"}[5m])), 0.001)) or on() vector(0)",
+          "legend": "Avg latency"
+        }
+      ]
+    },
+    {
+      "id": "agent_errors",
+      "title": "K8sGPT agent — Errors/s",
+      "description": "Errors. Failed LLM calls (k8sgpt_number_of_failed_backend_ai_calls: unreachable LLM, rate limits, auth) plus controller reconcile errors (k8sgpt_reconcile_error_count), per second over 5 minutes. Each term falls back to 0 on its own, because the failed-call counter exists only after the first failure. K8sGPT reconciles about every 30 seconds, so every reconcile failing reads about 0.03/s plus 0.03/s: warning from 0.001, critical from 0.02.",
+      "kind": "stat",
+      "grid": {
+        "x": 12,
+        "y": 51,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "ops/sec",
+      "decimals": 3,
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 0.001,
+            "tone": "warning"
+          },
+          {
+            "from": 0.02,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": false,
+      "queries": [
+        {
+          "expr": "(sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or vector(0)) + (sum(rate(k8sgpt_reconcile_error_count[5m])) or vector(0))",
+          "legend": "Errors/s"
+        }
+      ]
+    },
+    {
+      "id": "agent_saturation",
+      "title": "K8sGPT agent — Saturation",
+      "description": "Saturation. Share of the last minute the controller's workers spent reconciling: reconcile seconds per second divided by max_concurrent_reconciles (1 for K8sGPT), as a percent. A slow LLM makes each reconcile longer and pushes this up; 100% means the worker never rests and reconciles queue up. Sampling active_workers instead would almost always read 0, because a reconcile lasts well under the 5-second scrape interval.",
+      "kind": "stat",
+      "grid": {
+        "x": 18,
+        "y": 51,
+        "w": 6,
+        "h": 4
+      },
+      "unit": "percent",
+      "decimals": 1,
+      "thresholds": {
+        "base": "good",
+        "steps": [
+          {
+            "from": 70,
+            "tone": "warning"
+          },
+          {
+            "from": 95,
+            "tone": "critical"
+          }
+        ]
+      },
+      "sparkline": true,
+      "label": false,
+      "queries": [
+        {
+          "expr": "clamp_max(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[1m])) / clamp_min(sum(controller_runtime_max_concurrent_reconciles{controller=\"k8sgpt\"}), 1) * 100, 100) or on() vector(0)",
+          "legend": "Saturation"
+        }
+      ]
+    }
+  ]
+}

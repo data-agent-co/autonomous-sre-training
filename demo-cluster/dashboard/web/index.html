@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A live topology of the demo apps and the panels of the demo cluster, read from Prometheus.">
+  <title>Demo dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b82f6'/%3E%3Cpath d='M7 21l6-7 5 4 7-9' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/uPlot.min.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/topology.css">
+  <script src="js/theme.js"></script>
+  <script src="vendor/uPlot.iife.min.js" defer></script>
+  <script type="module" src="js/app.mjs"></script>
+</head>
+<body>
+  <header class="page-head">
+    <div class="page-title">
+      <h1 id="title">Demo dashboard</h1>
+      <p id="description"></p>
+    </div>
+    <div class="controls">
+      <label class="field" hidden>Range <select id="range"></select></label>
+      <label class="field" hidden>Refresh <select id="refresh"></select></label>
+      <div class="pbar" role="group" aria-label="Theme">
+        <button type="button" class="ptab" data-theme-choice="dark">Dark</button>
+        <button type="button" class="ptab" data-theme-choice="light">Light</button>
+      </div>
+      <p class="status" id="status" data-state="loading"><span class="dot"></span><span id="status-text">Loading…</span></p>
+    </div>
+  </header>
+  <main>
+    <div class="banner" id="banner" role="alert" hidden></div>
+    <noscript><div class="banner"><p>This dashboard needs JavaScript.</p></div></noscript>
+    <section class="card" id="topology" aria-label="Topology" hidden></section>
+    <section id="grid" aria-label="Panels"></section>
+  </main>
+</body>
+</html>

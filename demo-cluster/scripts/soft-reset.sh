@@ -7,7 +7,8 @@
 #   1. Stop the slow leak and the OOMKill loop
 #   2. Replace payments-api (restart count and back-off start from zero)
 #      and recommend-svc (memory back to baseline)
-#   3. Restart Prometheus (wipes its TSDB, so Perses graphs start flat)
+#   3. Restart Prometheus (wipes its TSDB, so the graphs of both dashboards
+#      start flat)
 #   4. Restart slack-relay, if Slack is on, so it forgets what it posted
 #   5. Restart the watcher, so it forgets what it reported
 #   6. Delete all K8sGPT Results and leftover watcher helm-test pods
@@ -134,7 +135,7 @@ if [[ ${#failed[@]} -gt 0 ]]; then
     echo "    log: ${failed_logs[$i]}" >&2
     tail -10 "${failed_logs[$i]}" | sed 's/^/      /' >&2
   done
-  echo "Re-run ${RUN_PREFIX}./scripts/soft-reset.sh, or start from scratch with ${RUN_PREFIX}./scripts/reset.sh." >&2
+  echo "Re-run ${RUN_PREFIX}./scripts/soft-reset.sh, or start from scratch with $(up_prefix)./scripts/reset.sh." >&2
   exit 1
 fi
 echo "=== done: '$CLUSTER_NAME' is back to its just-installed state ===   (logs: $LOG_DIR)"

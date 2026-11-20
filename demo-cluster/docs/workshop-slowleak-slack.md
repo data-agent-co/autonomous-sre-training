@@ -1,6 +1,6 @@
 # Workshop: From a slow leak to a K8sGPT alert in Slack
 
-In this lab you make recommend-svc leak memory with `trigger-leak.sh` and wait for the alert in Slack. K8sGPT stays silent while memory climbs and posts its diagnosis only after the leak ends in an OOMKill. Perses is only the view on the side, and the one place the leak shows early.
+In this lab you make recommend-svc leak memory with `trigger-leak.sh` and wait for the alert in Slack. K8sGPT stays silent while memory climbs and posts its diagnosis only after the leak ends in an OOMKill. The dashboard is only the view on the side, and the one place the leak shows early.
 
 ## Before you start
 
@@ -13,11 +13,11 @@ You need the demo cluster running with Slack and an LLM turned on. Run every com
 - [ ] Start clean, so an earlier fault doesn't mix in: `./scripts/soft-reset.sh`. It also stops a running OOMKill loop
 - [ ] All demo pods are healthy: `./scripts/check-pods.sh demo-apps` prints `all pods healthy in demo-apps`
 
-## Step 1: Open Slack (and Perses, if you like)
+## Step 1: Open Slack (and a dashboard, if you like)
 
 Open `#incidents-demo` and scroll to the bottom. Everything after your `check-slack.sh` test post comes from this lab.
 
-Optional: open the Perses dashboard at <http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview> (no login) next to it. In this lab Perses is worth a look: it is the only place the leak shows before it breaks anything.
+Optional: open the demo dashboard at <http://localhost:8080> (no login) next to it. Perses shows the same panels at <http://localhost:8081/projects/demo-cluster/dashboards/demo-cluster-overview>. In this lab the dashboard is worth a look: it is the only place the leak shows before it breaks anything.
 
 ## Step 2: Start the leak
 
@@ -89,9 +89,9 @@ kubectl --context kind-demo-cluster -n k8sgpt-system get results \
 
 **Check yourself:** the K8sGPT post names `container=leak-fixture`, not `recommend-svc`. The service container never fails; only the sidecar does.
 
-## Step 5 (optional): See the leak early in Perses
+## Step 5 (optional): See the leak early on the dashboard
 
-Perses is the answer to the question in Step 3: it shows the leak before any alert. These panels move during the quiet phase:
+The dashboard is the answer to the question in Step 3: it shows the leak before any alert. These panels move during the quiet phase:
 
 | Panel | What you see | When, with `trigger-leak.sh` | When, with `trigger-slowleak.sh` |
 | --- | --- | --- | --- |
@@ -100,6 +100,10 @@ Perses is the answer to the question in Step 3: it shows the leak before any ale
 | Composite Health Score | Drops 20 points at 50% of the limit and 30 more at 80% | Same times | Same times |
 
 Container memory is sampled every 10–15 s, so at the default rate the climb shows as one or two points before the jump to 100%; use `trigger-slowleak.sh` to watch it build.
+
+On the demo dashboard, what this table calls yellow is amber. A threshold line appears there only once the data is at least half way to it, so the two lines of Memory growth rate show up as the leak builds; the key in the panel's header lists both from the start.
+
+The demo dashboard's topology shows the leak too: the F2 badge on recommend-svc turns red once the sidecar uses 20% of its limit, and the recommend-svc node turns amber.
 
 After the OOMKill, OOMKills (last 5m), Restarts (last 5m) and CrashLoopBackOff turn yellow or red, as in the OOMKill lab.
 

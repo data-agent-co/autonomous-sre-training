@@ -1,6 +1,6 @@
 # Workshop: From OOMKill to a K8sGPT alert in Slack
 
-In this lab you OOMKill payments-api with `trigger-oomkill.sh` and follow the alert to Slack. K8sGPT analyzes the crashed pod and posts its diagnosis, with an LLM explanation, to `#incidents-demo` within about a minute. Perses is only the view on the side: it shows the same fault as graphs.
+In this lab you OOMKill payments-api with `trigger-oomkill.sh` and follow the alert to Slack. K8sGPT analyzes the crashed pod and posts its diagnosis, with an LLM explanation, to `#incidents-demo` within about a minute. The dashboard is only the view on the side: it shows the same fault as graphs.
 
 ## Before you start
 
@@ -15,11 +15,11 @@ You need the demo cluster running with Slack and an LLM turned on. Run every com
 
 Without an LLM, K8sGPT still posts, but the Report in Slack is empty.
 
-## Step 1: Open Slack (and Perses, if you like)
+## Step 1: Open Slack (and a dashboard, if you like)
 
 Open `#incidents-demo` and scroll to the bottom. The last message should be the test post from `check-slack.sh`. Everything after it comes from this lab.
 
-Optional: open the Perses dashboard at <http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview> (no login) next to it. Healthy means Demo apps healthy = 3 and every other tile in the top row is 0, green.
+Optional: open the demo dashboard at <http://localhost:8080> (no login) next to it. Perses shows the same panels at <http://localhost:8081/projects/demo-cluster/dashboards/demo-cluster-overview>. Healthy means Demo apps healthy = 4 (the three apps and loadgen) and every other tile in the top row is 0, green.
 
 ## Step 2: Trigger the OOMKill
 
@@ -76,9 +76,9 @@ K8sGPT anonymizes names before it calls the LLM, so the explanation may show a p
 
 **Check yourself:** after 2 minutes the channel has one K8sGPT post for payments-api with a filled-in Report, not two.
 
-## Step 4 (optional): See the same fault in Perses
+## Step 4 (optional): See the same fault on the dashboard
 
-Perses shows the fault as graphs but doesn't explain it. With the dashboard open, you should see these within 1–2 minutes:
+The dashboard shows the fault as graphs but doesn't explain it. With it open, you should see these within 1–2 minutes:
 
 | Panel | What you see |
 | --- | --- |
@@ -87,7 +87,9 @@ Perses shows the fault as graphs but doesn't explain it. With the dashboard open
 | CrashLoopBackOff | 0 → 1, red |
 | Service errors — % (E) | payments-api spikes toward 100% while its container is down |
 | Composite Health Score | Drops below 50, red |
-| K8sGPT detection events (per minute) | A blip when K8sGPT writes the Result behind the Slack post |
+| K8sGPT new Results | A blip when K8sGPT writes the Result behind the Slack post |
+
+On the demo dashboard, what this table calls yellow is amber, and each tile names its state in a word: OK, Warning or Critical. The topology shows the fault too: the F1 badge on payments-api turns red, and the payments-api node and its traffic edge turn red while the pod cannot serve.
 
 ## Step 5: Stop the fault and reset
 

@@ -4,7 +4,7 @@
 
 ## TL;DR
 
-We built a 23-panel [Perses](https://perses.dev) dashboard for a 3-app demo Kubernetes cluster that demonstrates the **golden signals** (Latency / Throughput / Errors / Saturation) of an SRE workflow alongside an AI agent (K8sGPT) that auto-detects faults. The dashboard exposes two parallel health scores — cluster health and agent self-health — so a viewer can immediately see whether the system is broken AND whether the detector is doing its job.
+We built a 23-panel [Perses](https://perses.dev) dashboard for a 3-app demo Kubernetes cluster that demonstrates the **golden signals** (Latency / Throughput / Errors / Saturation) of an SRE workflow alongside an AI agent (K8sGPT) that auto-detects faults. The dashboard exposes two parallel health scores — cluster health and agent self-health — so a viewer can immediately see whether the system is broken AND whether the detector is doing its job. A second renderer, the demo dashboard, draws the same panels under a live topology of the apps (§2.6).
 
 The key takeaways:
 
@@ -36,7 +36,7 @@ Three categories of metrics feed the dashboard:
 
 - **App-level (LTE)**: Throughput, latency, errors per service. Emitted by the apps themselves; scraped by Prometheus via per-app `ServiceMonitor` resources.
 - **Kubernetes-level (S + state)**: CPU, memory, pod restart count, container waiting reasons, pod readiness. Emitted by `kube-state-metrics` (running pods/state) and `cAdvisor` (container resource usage). Scraped via the kube-prometheus-stack defaults.
-- **AI agent (K8sGPT)**: `k8sgpt_number_of_results{object_namespace}`, `k8sgpt_number_of_results_by_type{kind, name}`, `k8sgpt_number_of_failed_backend_ai_calls{backend}`, `k8sgpt_reconcile_error_count`, plus controller-runtime's `controller_runtime_reconcile_*` and `controller_runtime_active_workers` for the `k8sgpt` controller. Emitted by the K8sGPT operator.
+- **AI agent (K8sGPT)**: `k8sgpt_number_of_results{object_namespace}`, `k8sgpt_number_of_results_by_type{kind, name}`, `k8sgpt_number_of_failed_backend_ai_calls{backend}`, `k8sgpt_reconcile_error_count`, plus controller-runtime's `controller_runtime_reconcile_*` and `controller_runtime_active_workers` for the `k8sgpt` controller. Emitted by the K8sGPT operator. `k8sgpt_number_of_results` keeps its last value after the Results are deleted, so the dashboards count Results with `k8sgpt_result_info{kind, object, backend}`, which kube-state-metrics exports from the Result objects (`helm/prometheus-stack-values.yaml`).
 - **Slack webhook (only with Slack on)**: `slack_webhook_up`, from the small slack-probe deployment.
 
 ### 1.3 The LTES signal map
@@ -267,6 +267,22 @@ The Perses chart's sidecar watches for ConfigMaps in the `monitoring` namespace 
 4. Perses picks it up within 15 seconds
 
 This pattern is **GitOps for dashboards**. Make it the convention from day one or it'll bite you the moment a teammate's UI edit silently disappears.
+
+### 2.6 A second renderer for the same panels
+
+The first panel of the Perses dashboard is Markdown: a table of the apps that cannot change with the cluster. We wanted that picture to be live, so the demo ships a second dashboard next to Perses: [`demo-dashboard`](../demo-cluster/dashboard/), a small Go server with one page. The page draws a live topology of the demo apps and, below it, the other 22 panels; its charts are drawn with [uPlot](https://github.com/leeoniya/uPlot). As with Perses, the browser never talks to Prometheus itself: the server forwards the two query endpoints (`/api/v1/query` and `/api/v1/query_range`) and nothing else. `up.sh` builds the image, loads it into the cluster, applies [`deployment.yaml`](../demo-cluster/dashboard/deployment.yaml) and port-forwards both dashboards: the page to `http://localhost:8080`, Perses to `http://localhost:8081`.
+
+The page does not read the Perses JSON. It has its own panel file, [`web/dashboard.json`](../demo-cluster/dashboard/web/dashboard.json), with the same queries. We keep the two files apart for three reasons:
+
+- **The Perses JSON is a Perses resource.** Its shape belongs to Perses and its panel plugins (`StatChart`, `TimeSeriesChart`, `Table`, `Markdown`). A page that read it would have to follow that schema and every change to it.
+- **Each renderer needs things the other does not.** The panel file holds the topology with its PromQL, a color slot per app and a flag for the headline number. It leaves out what only Perses uses, such as plugin kinds, hex colors and legend sizes.
+- **A small format is easy to check.** A panel is one small object with a handful of fields, so a test can check the whole file and reject any field the page does not know.
+
+Two files with the same queries drift apart unless something stops them. Here a test does: `TestPanelsMatchPerses` in [`dashboard_test.go`](../demo-cluster/dashboard/dashboard_test.go) fails when a panel, query, unit, threshold or grid position differs between the two files, and `make test` runs it. Descriptions and colors may differ on purpose, and the Markdown panel has no counterpart, because the live topology replaces it. A change to the panel file reaches the cluster with the next `./scripts/up.sh`, which rebuilds the image.
+
+The page also draws a few things differently from Perses: stat tiles that name their status in a word, one y-axis per plot, thresholds that do not flatten the data, and one color per app in every panel. [demo-cluster/README.md](../demo-cluster/README.md#demo-dashboard) lists them.
+
+**Best-practice note**: when two tools show the same dashboard, keep the queries identical and let a test prove it. Do not make one tool read the other's file format.
 
 ---
 
@@ -564,6 +580,7 @@ The dashboard JSON, queries, and patterns transfer 1:1. The infrastructure layer
 |---|---|
 | [`demo-cluster/perses/demo-cluster-overview.json`](../demo-cluster/perses/demo-cluster-overview.json) | The full Perses dashboard — 23 panels. Use as a template. |
 | [`demo-cluster/perses/`](../demo-cluster/perses/) | The Perses project and Prometheus datasource next to it. |
+| [`demo-cluster/dashboard/`](../demo-cluster/dashboard/) | The second renderer (§2.6): a Go server, its page and its own panel file, [`web/dashboard.json`](../demo-cluster/dashboard/web/dashboard.json). |
 | [`demo-cluster/helm/prometheus-stack-values.yaml`](../demo-cluster/helm/prometheus-stack-values.yaml) | Prometheus + Alertmanager tuning. |
 | [`demo-cluster/helm/perses-values.yaml`](../demo-cluster/helm/perses-values.yaml) | Perses: provisioning sidecar, no auth, 15s reload. |
 | [`demo-cluster/helm/k8sgpt-values.yaml`](../demo-cluster/helm/k8sgpt-values.yaml) | K8sGPT operator config — `serviceMonitor.additionalLabels` includes the `release` fix. |

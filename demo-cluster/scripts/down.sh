@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tear down everything up.sh and the trigger scripts start: the Perses
-# port-forward, a running OOMKill loop (trigger-oomkill.sh), and the
-# cluster itself.
+# Tear down everything up.sh and the trigger scripts start: the demo
+# dashboard and Perses port-forwards, a running OOMKill loop
+# (trigger-oomkill.sh), and the cluster itself.
 #
 # Deletes only the $CLUSTER_PROVIDER (kind or k3d) cluster named
 # $CLUSTER_NAME (default demo-cluster), through that tool, so it cannot
@@ -16,6 +16,9 @@ source "$SCRIPT_DIR/lib.sh"
 
 # Background helpers first, so none of them is left pointing at a cluster
 # that no longer exists.
+if stop_pidfile "$DASHBOARD_PF_PIDFILE" "$DASHBOARD_PF_MATCH"; then
+  echo "stopped the demo dashboard port-forward"
+fi
 if stop_pidfile "$PERSES_PF_PIDFILE" "$PERSES_PF_MATCH"; then
   echo "stopped the Perses port-forward"
 fi

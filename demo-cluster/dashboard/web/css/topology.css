@@ -1,0 +1,532 @@
+/* The topology card: the demo apps as boxes, the traffic that reaches them,
+   the ports they are read through and their fault badges. js/topology.mjs
+   builds the elements and sets their states as data attributes; this file
+   gives every state its look. The custom properties come from base.css. */
+
+.topology {
+  /* A status colour for small text: a step towards the text colour, so that
+     10px text keeps a contrast of 4.5 to 1 in both themes. */
+  --topo-good-text: color-mix(in srgb, var(--green) 70%, var(--text));
+  --topo-warning-text: color-mix(in srgb, var(--amber) 85%, var(--text));
+  --topo-critical-text: color-mix(in srgb, var(--red) 80%, var(--text));
+
+  /* The same tone under white text: the plain red is too light for it. */
+  --topo-critical-fill: color-mix(in srgb, var(--red) 84%, #000);
+}
+
+/* The stack is the layer and the legend under it. The wires are drawn over
+   both, in the stack's own coordinates. */
+.topo-stack {
+  position: relative;
+}
+
+.topo-stack > :not(.topo-wires) {
+  position: relative;
+  z-index: 1;
+}
+
+/* A line height in whole px keeps the panel under it, and with it every
+   wire, on whole px of the stack. */
+.topo-layer-title {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.topo-layer-title span {
+  margin-left: 6px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The panel scrolls sideways where the row does not fit. A scroll container
+   cuts what leaves it, so its paddings are larger than what hangs over the
+   nodes' edges: the ports, the fault badges and the fault ring. */
+.topo-panel {
+  padding: 16px 12px 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.topo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+}
+
+/* The gaps hold the wires: the traffic edges with their labels after the
+   source, and after the stacked nodes the link to the node beside them. */
+.topo-col {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.topo-col + .topo-col {
+  margin-left: 96px;
+}
+
+/* What a source and a node share: an icon over a name over a sub-line. */
+
+.topo-icon {
+  margin-bottom: 6px;
+  color: var(--topo-status, var(--text-muted));
+}
+
+.topo-label {
+  margin-bottom: 2px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* A long reason wraps inside the box instead of widening it. It may use
+   half of the box's side padding, which is what the longest waiting reason
+   needs to stay in one piece, and its lines are kept about equally long so
+   that a container's name is not cut in two. */
+.topo-sub {
+  margin: 0 -8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Until the first answers arrive the sub-lines would all read "no data". */
+.topology:not(.topo-loaded) .topo-sub {
+  visibility: hidden;
+}
+
+/* The traffic source. It is a tool, not a tier: dashed and grey until it
+   runs, then tinted by the share of 5xx answers in its traffic. */
+
+.topo-src {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 88px;
+  margin-right: 96px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border2);
+  border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.topo-src:not([data-state="running"]) .topo-label {
+  color: var(--text-muted);
+}
+
+.topo-src[data-state="running"] {
+  --topo-status: var(--green);
+  --topo-status-text: var(--topo-good-text);
+  border-style: solid;
+  border-color: rgba(11, 218, 94, .45);
+  background: var(--surface);
+}
+
+.topo-src[data-errors="mid"] {
+  --topo-status: var(--amber);
+  --topo-status-text: var(--topo-warning-text);
+  border-color: rgba(245, 158, 11, .5);
+}
+
+.topo-src[data-errors="high"] {
+  --topo-status: var(--red);
+  --topo-status-text: var(--topo-critical-text);
+  border-color: rgba(239, 68, 68, .55);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, .15);
+}
+
+.topo-src[data-state="running"] .topo-icon {
+  animation: topo-pulse 1.6s ease-in-out infinite;
+}
+
+.topo-src[data-state="running"] .topo-sub {
+  color: var(--topo-status-text);
+  font-weight: 600;
+}
+
+/* A node. Every node has the same size, whatever its sub-line says. The
+   height is even, so the middle of the box, where its edge arrives, and the
+   node that stands alone at mid-height are on whole px. */
+
+.topo-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 170px;
+  min-height: 106px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.topo-node[data-status="healthy"] {
+  --topo-status: var(--green);
+  border-color: rgba(11, 218, 94, .3);
+}
+
+.topo-node[data-status="degraded"] {
+  --topo-status: var(--amber);
+  --topo-status-text: var(--topo-warning-text);
+  border-color: rgba(245, 158, 11, .3);
+}
+
+.topo-node[data-status="error"] {
+  --topo-status: var(--red);
+  --topo-status-text: var(--topo-critical-text);
+  border-color: rgba(239, 68, 68, .3);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, .15);
+}
+
+/* Grey and dashed, not red: a missing signal is not an unhealthy signal. */
+.topo-node[data-status="unknown"] {
+  border-color: var(--border2);
+  border-style: dashed;
+}
+
+/* The node whose fault is active gets a ring. The ring has the colour of the
+   node's status, so a node that still serves does not look like one that
+   cannot; the red badge is what says that the fault is on. */
+.topo-node[data-fault="active"] {
+  border-color: var(--topo-status, var(--red));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--topo-status, var(--red)) 25%, transparent);
+}
+
+.topo-node:is([data-status="degraded"], [data-status="error"]) .topo-sub {
+  color: var(--topo-status-text);
+  font-weight: 600;
+}
+
+.topo-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--topo-status, var(--text-muted));
+}
+
+/* The fault badge hangs over the node's top left corner. */
+.topo-badge {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 800 8px/1 var(--mono);
+  cursor: help;
+}
+
+.topo-badge[data-state="active"] {
+  border-color: transparent;
+  background: var(--topo-critical-fill);
+  color: #fff;
+  animation: topo-fault 1s ease-in-out infinite;
+}
+
+/* The ports sit on the middle of the node's bottom edge, half outside. */
+.topo-ports {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  transform: translate(-50%, 50%);
+}
+.topo-port {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--border2);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.topo-port[data-state="up"] {
+  border-color: currentColor;
+}
+
+.topo-port[data-kind="metrics"][data-state="up"] {
+  color: var(--green);
+}
+
+.topo-port[data-kind="scan"][data-state="up"] {
+  color: var(--primary);
+}
+
+/* The wires: one SVG over the stack. Its lines never catch the pointer. */
+
+.topo-wires {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.topo-wires path {
+  fill: none;
+}
+
+.topo-stem,
+.topo-edge-run {
+  stroke: var(--border2);
+  stroke-width: 2;
+}
+
+.topo-wires .topo-edge-head {
+  fill: var(--border2);
+}
+
+.topo-edge-label {
+  fill: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+/* Traffic to a node that cannot serve. */
+.topo-edge[data-state="blocked"] .topo-edge-run {
+  stroke: var(--red);
+}
+
+.topo-wires .topo-edge[data-state="blocked"] .topo-edge-head {
+  fill: var(--red);
+}
+
+.topo-edge[data-state="blocked"] .topo-edge-line {
+  animation: topo-blocked 1.2s linear infinite;
+}
+
+.topo-edge[data-state="blocked"] .topo-edge-label {
+  fill: var(--topo-critical-text);
+}
+
+/* The dot that travels along an edge while traffic flows. topology.mjs sets
+   its offset-path. Where it does not travel it rests on the last run. */
+.topo-edge-dot {
+  display: none;
+  fill: var(--green);
+  opacity: .9;
+  offset-distance: calc(100% - 24px);
+  offset-rotate: 0deg;
+}
+
+.topo-edge[data-state="flow"] .topo-edge-dot {
+  display: inline;
+  animation: topo-flow 1.8s linear infinite;
+}
+
+.topo-edge[data-errors="mid"] .topo-edge-dot {
+  fill: var(--amber);
+}
+
+.topo-edge[data-errors="high"] .topo-edge-dot {
+  fill: var(--red);
+}
+
+/* The link from the nodes that get traffic to the others. Its opacity
+   applies to the whole path, so its joins draw no darker spots. */
+.topo-link {
+  stroke: var(--text-muted);
+  stroke-width: 1.2;
+  opacity: .55;
+}
+
+/* The legend: one chip per kind of port, centred under the panel. */
+.topo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 12px auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topo-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 4px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.topo-chip .topo-port {
+  width: 18px;
+  height: 18px;
+  cursor: default;
+}
+
+/* What went wrong with the last refresh, when something did. */
+.topo-problem {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--red) 14%, var(--surface));
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.topo-problem .icon {
+  margin-top: 1px;
+  color: var(--red);
+}
+
+/* The notes: what the picture leaves out, closed until asked for. */
+
+.topo-notes {
+  margin-top: 14px;
+}
+
+.topo-notes summary {
+  width: fit-content;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.topo-notes summary:hover,
+.topo-notes[open] summary {
+  color: var(--text-dim);
+}
+
+.topo-notes-body {
+  margin-top: 12px;
+}
+
+/* Motion */
+
+@keyframes topo-flow {
+  0% {
+    offset-distance: 0%;
+    opacity: .9;
+  }
+
+  80% {
+    opacity: .9;
+  }
+
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes topo-blocked {
+  50% {
+    opacity: .3;
+  }
+}
+
+@keyframes topo-pulse {
+  0%,
+  100% {
+    opacity: .4;
+    transform: scale(.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes topo-fault {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, .7);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
+    transform: scale(1.2);
+  }
+}
+
+/* Forced colours (Windows High Contrast) replace backgrounds, borders and
+   shadows, which is all that tells these states apart. */
+@media (forced-colors: active) {
+  .topo-badge[data-state="active"] {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .topo-node[data-fault="active"] {
+    border-width: 3px;
+    border-color: Highlight;
+  }
+
+  .topo-port:not([data-state="up"]) {
+    border-style: dashed;
+  }
+
+  /* The dot keeps the colour of the node's status. */
+  .topo-dot {
+    forced-color-adjust: none;
+  }
+}
+
+/* Every state reads without its motion: the dot rests on its edge, the
+   blocked edge stays red. */
+@media (prefers-reduced-motion: reduce) {
+  .topo-src[data-state="running"] .topo-icon,
+  .topo-badge[data-state="active"],
+  .topo-edge[data-state="blocked"] .topo-edge-line,
+  .topo-edge[data-state="flow"] .topo-edge-dot {
+    animation: none;
+  }
+
+  .topo-src,
+  .topo-node {
+    transition: none;
+  }
+}

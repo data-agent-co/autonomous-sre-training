@@ -14,3 +14,13 @@ This project includes third-party code, also under the Apache License 2.0:
 
 See k8s-watcher/NOTICE for the source repositories, versions, copied paths and
 the list of modifications.
+
+This project also includes third-party code under the MIT License:
+
+  - The demo dashboard (demo-cluster/dashboard/) contains uPlot v1.6.32
+    (github.com/leeoniya/uPlot), Copyright (c) 2022 Leon Sorokin, unmodified,
+    under demo-cluster/dashboard/web/vendor. The license text is
+    demo-cluster/dashboard/web/vendor/uPlot.LICENSE.
+
+See demo-cluster/dashboard/web/vendor/README.md for the copied files and their
+checksums.

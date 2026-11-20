@@ -1,10 +1,10 @@
-# golangci-lint v2 configuration for the watcher module (k8s-watcher/).
-# Run with `make lint`; CI uses the same golangci-lint version (see
-# .github/workflows/ci.yml).
+# golangci-lint v2 configuration for the two Go modules `make lint` checks:
+# the watcher (k8s-watcher/) and the demo dashboard (demo-cluster/dashboard/).
+# CI uses the same golangci-lint version (see .github/workflows/ci.yml).
 version: "2"
 
 run:
-  # Paths below are relative to k8s-watcher/go.mod.
+  # Paths below are relative to the go.mod of the module being linted.
   relative-path-mode: gomod
 
 linters:
@@ -34,8 +34,9 @@ linters:
     - wastedassign
   exclusions:
     rules:
-      # main exits non-zero after a lane fails; the deferred signal-context
-      # cancel has nothing left to release at that point.
+      # The watcher's main exits non-zero after a lane fails; the deferred
+      # signal-context cancel has nothing left to release at that point.
+      # No file of the dashboard module has this path.
       - path: cmd/watcher/main\.go
         linters: [gocritic]
         text: exitAfterDefer

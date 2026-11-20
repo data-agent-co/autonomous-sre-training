@@ -69,5 +69,6 @@ echo
 echo "  Hint: look at the pod's events and logs, e.g."
 echo "    kubectl --context $KUBE_CONTEXT -n $NS describe pod <name>"
 echo "  ImagePullBackOff on a locally built image (payments-api, recommend-svc,"
-echo "  k8s-watcher) means it was not loaded into the cluster: re-run ${RUN_PREFIX}./scripts/up.sh."
+echo "  demo-dashboard, k8s-watcher) means it was not loaded into the cluster:"
+echo "  re-run $(up_prefix)./scripts/up.sh."
 exit 1

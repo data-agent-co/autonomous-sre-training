@@ -198,14 +198,15 @@ internal/pack/cm/mapper/      Result for a ConfigMap change
 
 ## Development
 
-From the repository root (`make help` lists every target):
+From the repository root (`make help` lists every target). The Go targets
+also cover the repository's second module, `demo-cluster/dashboard`:
 
 ```sh
 make build      # go build; binary in k8s-watcher/bin/watcher
 make test       # go test -race ./...
 make lint       # golangci-lint (config in .golangci.yml)
 make vuln       # govulncheck
-make image      # docker build -t k8s-watcher:dev k8s-watcher/
+make image      # docker build -t k8s-watcher:dev k8s-watcher/ (and the demo-dashboard image)
 make ci         # every check CI runs; none needs a cluster
 ```
 

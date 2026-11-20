@@ -9,11 +9,13 @@
 
 Code for a hands-on autonomous SRE workshop. One script builds a local
 [kind](https://kind.sigs.k8s.io) cluster with three small sample apps,
-Prometheus and [Perses](https://perses.dev), the [K8sGPT](https://k8sgpt.ai) operator, and a small
-watcher that writes K8sGPT Results. You then break an app on purpose (an
-OOMKill, a slow memory leak, a ConfigMap change) and compare what each layer
-catches: the golden-signal dashboard, K8sGPT's analysis (optionally explained
-by an LLM and posted to Slack), and the watcher.
+Prometheus, a demo dashboard with a live topology of the apps,
+[Perses](https://perses.dev) with the same panels, the
+[K8sGPT](https://k8sgpt.ai) operator, and a small watcher that writes K8sGPT
+Results. You then break an app on purpose (an OOMKill, a slow memory leak, a
+ConfigMap change) and compare what each layer catches: the golden-signal
+dashboard, K8sGPT's analysis (optionally explained by an LLM and posted to
+Slack), and the watcher.
 
 The cluster runs on your laptop. An LLM and Slack are optional.
 
@@ -30,9 +32,10 @@ The cluster runs on your laptop. An LLM and Slack are optional.
 `up.sh` checks for these tools and for a running Docker before it starts.
 To run the demo on a [k3d](https://k3d.io) cluster instead of kind, see
 [Using k3d instead of kind](demo-cluster/README.md#using-k3d-instead-of-kind).
-You don't need Python or Go on your machine: the apps and the watcher are
-built and run in Docker. Go is only for working on the watcher (see
-[Repo layout](#repo-layout)).
+You don't need Python, Go or Node.js on your machine: the apps, the demo
+dashboard and the watcher are built and run in Docker. Go is only for working
+on the watcher or the dashboard, and Node.js only for the dashboard's
+JavaScript tests (see [Repo layout](#repo-layout)).
 
 Optional: a Slack incoming webhook ([Slack](#slack-optional)) and an LLM,
 either a cloud API key or a model on your laptop ([LLM](#llm-optional)).
@@ -87,9 +90,15 @@ kubectl --context kind-demo-cluster -n k8sgpt-system get results -o yaml
 Without an LLM, each Result names the problem (`spec.error`); with one,
 `spec.details` also holds the LLM's explanation.
 
-**Open Perses.** `up.sh` port-forwards it in the background:
-<http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview>
-(no login). If the port-forward stopped, run `./scripts/perses.sh`.
+**Open the demo dashboard.** `up.sh` port-forwards it in the background:
+<http://localhost:8080> (no login). It shows a live topology of the sample
+apps, where the F1 badge on `payments-api` is red while the fault is active,
+above the golden-signal panels. If the port-forward stopped, run
+`./scripts/dashboard.sh`.
+
+**Or open Perses**, which shows the same panels in a general dashboard tool:
+<http://localhost:8081/projects/demo-cluster/dashboards/demo-cluster-overview>
+(no login). If its port-forward stopped, run `./scripts/perses.sh`.
 
 **Stop the fault:**
 
@@ -97,8 +106,8 @@ Without an LLM, each Result names the problem (`spec.error`); with one,
 ./scripts/trigger-oomkill.sh --stop
 ```
 
-The slow leak, the ConfigMap watcher, the dashboard panels and every script
-are described in [demo-cluster/README.md](demo-cluster/README.md).
+The slow leak, the ConfigMap watcher, both dashboards and every script are
+described in [demo-cluster/README.md](demo-cluster/README.md).
 
 ## LLM (optional)
 
@@ -141,7 +150,7 @@ Run these from `demo-cluster/`:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster and returns it to its just-installed state: stops the faults, replaces the sample app pods, wipes Prometheus data, deletes all Results. |
 | `./scripts/reset.sh` | Deletes the cluster and builds it again (`down.sh`, then `up.sh`). |
-| `./scripts/down.sh` | Stops the Perses port-forward and the OOMKill loop, then deletes the cluster (kind or k3d). |
+| `./scripts/down.sh` | Stops the demo dashboard and Perses port-forwards and the OOMKill loop, then deletes the cluster (kind or k3d). |
 
 From the repository root, `make down` runs `down.sh`.
 
@@ -157,28 +166,36 @@ switch back to your usual one afterwards (`kubectl config use-context <name>`).
 │   ├── scripts/          up, down, reset, fault triggers, helpers
 │   ├── manifests/        sample apps, load generator, K8sGPT resource, Slack relay and probe
 │   ├── helm/             values for kube-prometheus-stack, Perses, the K8sGPT operator and the watcher
-│   ├── perses/           the dashboard, its project and datasource (Perses resources)
+│   ├── dashboard/        the demo dashboard: Go server, page, panel file, Dockerfile, manifest
+│   ├── perses/           the Perses dashboard, its project and datasource (Perses resources)
 │   ├── docs/             running K8sGPT with LM Studio
 │   └── .env.example      optional settings (LLM, Slack)
 ├── k8s-watcher/              Go source of the watcher
 ├── charts/k8s-watcher/       Helm chart for the watcher
-└── docs/                 Groq setup, how the dashboard was built
+└── docs/                 Groq setup, how the dashboards were built
 ```
 
 The **watcher** is a small Go service that turns Kubernetes Warning events (EV
 lane) and changes to opted-in ConfigMaps (CM lane) into K8sGPT Result objects.
 The demo runs the CM lane only. [k8s-watcher/README.md](k8s-watcher/README.md)
-describes what it reports and how to configure it. To work on it (Go 1.27.1),
-from the repository root:
+describes what it reports and how to configure it.
+
+The **demo dashboard** is a small Go server with its page embedded in the
+binary. [demo-cluster/dashboard/README.md](demo-cluster/dashboard/README.md)
+describes its files, how to run it on your machine and how to change a panel.
+
+To work on either (Go 1.27.1; Node.js for `make test-js`), from the
+repository root:
 
 ```bash
-make test       # go test -race in k8s-watcher/
-make image      # docker build -t k8s-watcher:dev k8s-watcher/
+make test       # go test -race in k8s-watcher/ and demo-cluster/dashboard/
+make test-js    # node --test on the dashboard's JavaScript
+make image      # docker build of k8s-watcher:dev and demo-dashboard:demo
 make helm-lint  # lint and render charts/k8s-watcher
 make ci         # every CI check; none needs a cluster
 ```
 
-`up.sh` rebuilds the image and loads it into the cluster on every run.
+`up.sh` rebuilds both images and loads them into the cluster on every run.
 
 ## Troubleshooting
 
@@ -192,7 +209,9 @@ make ci         # every CI check; none needs a cluster
 - **kind fails to start the node.** The pinned node image needs kind v0.33.0
   or later. Upgrade kind, or run with `KIND_NODE_IMAGE= ./scripts/up.sh` to use
   your kind version's default image.
-- **Port 8080 is busy.** `PERSES_PORT=8081 ./scripts/perses.sh`.
+- **Port 8080 or 8081 is busy.** Give that port-forward another port:
+  `DASHBOARD_PORT=8082 ./scripts/dashboard.sh` for the demo dashboard (8080),
+  `PERSES_PORT=8083 ./scripts/perses.sh` for Perses (8081).
 - **No AI text in the Results.** Check the key and model in `.env`, then
   re-run `./scripts/up.sh`; it also restarts the operator, which stops
   calling the LLM after repeated failures. See
@@ -219,4 +238,7 @@ trademarks or product names of Data Agent Inc.
 
 Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). The watcher
 contains code copied from other Apache-2.0 projects; see
-[k8s-watcher/NOTICE](k8s-watcher/NOTICE).
+[k8s-watcher/NOTICE](k8s-watcher/NOTICE). The demo dashboard includes
+[uPlot](https://github.com/leeoniya/uPlot), unmodified, under the MIT License;
+see
+[demo-cluster/dashboard/web/vendor/uPlot.LICENSE](demo-cluster/dashboard/web/vendor/uPlot.LICENSE).

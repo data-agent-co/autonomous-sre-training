@@ -1,7 +1,8 @@
 # kube-prometheus-stack values tuned for a laptop demo cluster.
 # Disables the heavy bits we don't need; keeps Prometheus, Alertmanager,
-# kube-state-metrics, and node-exporter. Dashboards run in Perses
-# (helm/perses-values.yaml), so the chart's bundled dashboard UI is off.
+# kube-state-metrics, and node-exporter. Dashboards run in the demo
+# dashboard (dashboard/) and in Perses (helm/perses-values.yaml), so the
+# chart's bundled dashboard UI is off.
 
 grafana:
   enabled: false
@@ -34,6 +35,40 @@ alertmanager:
       limits:
         memory: 128Mi
         cpu: 100m
+
+# Exports one k8sgpt_result_info series per K8sGPT Result object, for the
+# dashboards' "K8sGPT new Results" and "K8sGPT diagnoses by Kind" panels. The
+# operator's own k8sgpt_number_of_results gauge cannot be used: it keeps its
+# last count after the Results are deleted.
+kube-state-metrics:
+  rbac:
+    extraRules:
+      - apiGroups: [core.k8sgpt.ai]
+        resources: [results]
+        verbs: [list, watch]
+  customResourceState:
+    enabled: true
+    config:
+      spec:
+        resources:
+          - groupVersionKind:
+              group: core.k8sgpt.ai
+              version: v1alpha1
+              kind: Result
+            metricNamePrefix: k8sgpt_result
+            labelsFromPath:
+              name: [metadata, name]
+              result_namespace: [metadata, namespace]
+            metrics:
+              - name: info
+                help: One series per K8sGPT Result, with the flagged object and the LLM backend.
+                each:
+                  type: Info
+                  info:
+                    labelsFromPath:
+                      kind: [spec, kind]
+                      object: [spec, name]
+                      backend: [spec, backend]
 
 # Disable bits we don't need on a laptop demo.
 kubeApiServer:

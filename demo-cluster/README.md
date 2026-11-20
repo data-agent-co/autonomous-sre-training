@@ -1,9 +1,9 @@
 # demo-cluster
 
 The workshop cluster: a local kind (or k3d) cluster with three sample apps, a load
-generator, Prometheus and Perses, the K8sGPT operator and the watcher. You
-trigger real faults and compare what the dashboard, K8sGPT and the watcher
-each see.
+generator, Prometheus, two dashboards (the demo dashboard and Perses), the
+K8sGPT operator and the watcher. You trigger real faults and compare what the
+dashboards, K8sGPT and the watcher each see.
 
 Prerequisites and a short quickstart are in the
 [top-level README](../README.md#prerequisites). This page is the full guide.
@@ -36,15 +36,16 @@ Your laptop (Docker)
 │ namespace monitoring                                                         │
 │   kube-prometheus-stack: Prometheus (5s scrape, 6h retention),               │
 │   Alertmanager, kube-state-metrics, node-exporter                            │
-│   Perses (dashboards)                                                        │
+│   demo-dashboard   live topology and panels; forwards queries to Prometheus  │
+│   Perses           the same panels in a general dashboard tool               │
 │                                                                              │
 │ namespace kube-system                                                        │
 │   metrics-server (kubectl top, leak-progress.sh)                             │
 └──────────────────────────────────────────────────────────────────────────────┘
       │ kubectl port-forward     │ HTTPS, optional            │ HTTPS, optional
       ▼                          ▼                            ▼
-  localhost:8080             LLM API (OpenAI-compatible,    Slack incoming
-  Perses                     or a model on your laptop)     webhook
+  localhost:8080 dashboard   LLM API (OpenAI-compatible,    Slack incoming
+  localhost:8081 Perses      or a model on your laptop)     webhook
 ```
 
 - **payments-api** (Go) serves `/healthz`, `/metrics` and `/allocate`, which
@@ -64,6 +65,10 @@ Your laptop (Docker)
   when a ConfigMap labelled `k8sgpt-detection-pack.io/critical=true` changes,
   in any namespace. Its EV lane (Kubernetes Warning events) is off in this
   demo. [`../k8s-watcher/README.md`](../k8s-watcher/README.md) has the details.
+- **The demo dashboard** (`demo-dashboard`, built from
+  [`dashboard/`](dashboard)) and **Perses** draw the same panels from the same
+  Prometheus queries. The demo dashboard adds a live topology of the apps. See
+  [Demo dashboard](#demo-dashboard) and [Perses dashboard](#perses-dashboard).
 
 The data path during an OOMKill:
 
@@ -114,15 +119,18 @@ These are read from your shell, not from `.env`:
 |---|---|---|
 | `CLUSTER_NAME` | `demo-cluster` | The cluster every script acts on, through the context `<provider>-<name>`. |
 | `CLUSTER_PROVIDER` | `kind` | `kind` or `k3d`. See [Using k3d instead of kind](#using-k3d-instead-of-kind). |
-| `PERSES_PORT` | `8080` | Local port for the Perses port-forward. |
+| `DASHBOARD_PORT` | `8080` | Local port for the demo dashboard port-forward. |
+| `PERSES_PORT` | `8081` | Local port for the Perses port-forward. `up.sh` stops if it equals `DASHBOARD_PORT`. |
 | `ENV_FILE` | `demo-cluster/.env` | Settings file. A missing default file is fine; a missing file you named is an error. A relative path is relative to your current directory. |
 | `KIND_NODE_IMAGE` | the pinned `kindest/node:v1.37.0` | Node image for a new cluster. Set it empty to use your kind version's default. |
 
-To run a second demo cluster next to the first, give it its own name and
-Perses port, and use the same prefix for every script you run against it:
+To run a second demo cluster next to the first, give it its own name and its
+own two ports. Use the same `CLUSTER_NAME` prefix for every script you run
+against it. Only `up.sh`, `reset.sh` (which runs `up.sh`), `dashboard.sh` and
+`perses.sh` read the ports:
 
 ```bash
-CLUSTER_NAME=demo-2 PERSES_PORT=8081 ./scripts/up.sh
+CLUSTER_NAME=demo-2 DASHBOARD_PORT=8082 PERSES_PORT=8083 ./scripts/up.sh
 CLUSTER_NAME=demo-2 ./scripts/trigger-oomkill.sh
 ```
 
@@ -171,19 +179,28 @@ It runs these steps in order, each with its own log file:
 9. **Perses dashboard**: the `.yaml` and `.json` files in [`perses/`](perses),
    as a ConfigMap the Perses sidecar loads. The step waits until Perses has
    reloaded the dashboard and fails on a provisioning error.
-10. **K8sGPT operator**.
-11. **Slack relay + probe**, or with Slack off, removal of what an earlier run
+10. **demo dashboard**: builds `demo-dashboard:demo` from
+    [`dashboard/`](dashboard), loads it into the cluster's node and applies
+    [`dashboard/deployment.yaml`](dashboard/deployment.yaml), the Deployment
+    and Service `demo-dashboard` in `monitoring`. The step stamps the pod
+    template with a checksum of the image, so a re-run replaces the pod only
+    when the image changed.
+11. **K8sGPT operator**.
+12. **Slack relay + probe**, or with Slack off, removal of what an earlier run
     with Slack left behind.
-12. **K8sGPT CR + LLM secret**: renders
+13. **K8sGPT CR + LLM secret**: renders
     [`manifests/k8sgpt/k8sgpt-cr.yaml`](manifests/k8sgpt/k8sgpt-cr.yaml) from
     your settings, applies it, and restarts the operator.
-13. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
+14. **watcher**: builds `k8s-watcher:dev` from `../k8s-watcher`, loads it
     into the cluster's node and installs the `k8s-watcher` release in
     `k8sgpt-system` with [`helm/watcher-values.yaml`](helm/watcher-values.yaml).
-14. **pod smoke-test**: fails if a pod in the three namespaces is stuck
+15. **pod smoke-test**: fails if a pod in the three namespaces is stuck
     (ImagePullBackOff, CrashLoopBackOff, long Pending).
-15. **Perses port-forward**: optional. If it fails, `up.sh` prints `WARN` and
-    finishes anyway.
+16. **demo dashboard port-forward**: optional. If it fails, `up.sh` prints
+    `WARN` and finishes anyway.
+17. **Perses port-forward**: optional in the same way. Before these two steps
+    `up.sh` stops both port-forwards of an earlier run, so each one starts on
+    its current port.
 
 When a required step fails, `up.sh` prints `FAIL`, the log path and the last
 20 lines of the log, and stops. Logs go to
@@ -192,7 +209,8 @@ When a required step fails, `up.sh` prints `FAIL`, the log path and the last
 idempotent.
 
 At the end, `up.sh` prints whether AI explanations and Slack are on, and the
-commands to verify, trigger faults, read Results, open Perses and tear down.
+commands to verify, trigger faults, read Results, open the demo dashboard and
+Perses, and tear down.
 
 ### Your kubectl context
 
@@ -225,7 +243,8 @@ few restarts the pod is in CrashLoopBackOff.
 
 - **Dashboard:** Restart rate per pod climbs, Service errors % spikes during
   each restart window, OOMKills (last 5m) counts up, and the Composite Health
-  Score drops.
+  Score drops. In the demo dashboard's topology the F1 badge turns red, and
+  the payments-api node and its edge turn red while the pod cannot serve.
 - **Alertmanager:** `DemoContainerOOMKilled` fires seconds after the first
   OOMKill; with Slack it is the first post.
 - **K8sGPT:** within a minute or two, a Result for the payments-api pod:
@@ -273,7 +292,8 @@ own 128Mi limit, from a baseline of about 15 MiB:
 
 - **Dashboard:** Saturation and Memory growth rate show the leak before it
   breaks anything; the Composite Health Score drops at 50% and again at 80%
-  of the limit.
+  of the limit. In the demo dashboard's topology the F2 badge turns red once
+  the sidecar uses 20% of its limit, and the recommend-svc node turns amber.
 - **K8sGPT:** stays silent while the memory climbs, because nothing has failed
   yet. This is the point of the scenario: a leak is visible on the dashboard
   before any analyzer has a failure to report. After the OOMKill,
@@ -349,29 +369,122 @@ Clean up the example with
 `kubectl --context kind-demo-cluster -n demo-apps delete configmap payments-config`.
 Unlike K8sGPT, the watcher never deletes its Results; `soft-reset.sh` does.
 
+## Demo dashboard
+
+`up.sh` port-forwards the demo dashboard in the background. Open
+<http://localhost:8080> (no login). The port-forward dies with its pod or
+cluster (a reset, a Docker restart); bring it back with
+`./scripts/dashboard.sh`, stop it with `./scripts/dashboard.sh --stop`.
+
+The dashboard is one page: a live topology of the demo apps on top and 22
+panels below it. Like Perses, it shows the last 2 minutes and refreshes every
+5 seconds. The header lets you pick another time range or refresh interval and
+switch between a dark and a light theme. The page comes from `demo-dashboard`
+in `monitoring`, a small Go server that also forwards the page's queries to
+Prometheus. It forwards the two query endpoints and nothing else, so the page
+cannot change anything in Prometheus.
+
+### Topology
+
+The topology card draws the `demo-apps` namespace from live Prometheus data:
+
+- **Traffic source.** The box labelled Traffic is loadgen. While loadgen runs,
+  it shows the total request rate. An edge runs from it to each app it calls:
+  payments-api and recommend-svc.
+- **Nodes.** One box each for payments-api, recommend-svc and catalog-svc.
+  catalog-svc stands apart with no edge, because it gets no traffic. A node is
+  green while its pod is healthy. It turns amber when the pod serves but
+  something is or was wrong: a container is starting, memory is at 50% of the
+  limit or more, a container restarted in the last 5 minutes or was OOMKilled
+  in the last 2, or the node's fault is active. It turns red when the pod
+  cannot serve: it is not Ready, or a container waits in CrashLoopBackOff or
+  the like. The line under the node's name says which; on a healthy node it
+  shows the stack and the memory limit. A node with no data is grey, not red.
+- **Edges.** An edge shows the request rate, and a dot travels along it while
+  traffic flows. The dot is green, amber from 1% of 5xx responses and red
+  from 50%. When the app cannot serve, the edge turns red and reads "down".
+- **Ports.** The marks on a node's bottom edge show who reads it. `metrics`
+  is lit while Prometheus scrapes the app, `scan` while K8sGPT is running.
+  catalog-svc has no `metrics` port, because it has no `/metrics` endpoint.
+  The two chips under the diagram are the legend.
+- **Fault badges.** F1 on payments-api is the
+  [OOMKill](#1-oomkill-payments-api), F2 on recommend-svc the
+  [memory leak](#2-slow-memory-leak-recommend-svc). A badge is grey while its
+  fault is idle and red while it is active. F1 is active while a payments-api
+  container is in CrashLoopBackOff, is down after an OOMKill, or was OOMKilled
+  and restarted in the last 2 minutes. F2 is active under the same three
+  conditions for the `leak-fixture` sidecar, and already when the sidecar uses
+  20% of its memory limit or more. So F2 lights up while the leak still
+  climbs, before anything breaks.
+- **Notes.** "Services, fault triggers and detection layers" under the diagram
+  opens what Perses shows as its first panel: the apps with their fault
+  triggers, and the detection layers.
+
+Hover over a node, a port or a badge for the details. An idle badge names the
+script that triggers its fault. The Tab key reaches the Traffic box and the
+nodes too, and a screen reader reads the same details there.
+
+### Panels
+
+The 22 panels are items 2 to 8 of the [Perses dashboard](#perses-dashboard)
+list below, with the same titles, queries, units, thresholds and positions. A
+few things are drawn differently on purpose:
+
+- **Stat tiles** are tinted by their status and name it in a word (OK,
+  Warning, Critical, Idle or No data), so the status never rests on colour
+  alone. Perses fills the whole tile with one colour.
+- **One y axis per plot.** LLM calls (errors + latency) has two units, so it
+  is two plots stacked on one time axis: one for the errors per second, one
+  for the latency. Perses draws both in one chart with two y axes.
+- **Thresholds** are dashed lines in the plot, and a key in the panel header
+  lists their values. The y axis grows to take in a threshold only once the
+  data is at least half way to it, so the 100 ms and 500 ms lines do not
+  flatten an idle Latency p95 panel as they do in Perses.
+- **Series colours follow the app**, not the order of the series:
+  payments-api, recommend-svc, catalog-svc, loadgen and leak-fixture each
+  keep one colour in every panel.
+
+The topology and the panels are defined in
+[`dashboard/web/dashboard.json`](dashboard/web/dashboard.json). The page does
+not read the Perses JSON. A test,
+[`dashboard/dashboard_test.go`](dashboard/dashboard_test.go), compares the two
+files and fails when a panel, query, unit, threshold or grid position differs,
+so change both together and run `make test` from the repository root. The page
+is built into the image: re-run `./scripts/up.sh` to see a change in the
+cluster. [`dashboard/README.md`](dashboard/README.md) has the file layout and
+how to run the dashboard on your machine.
+
 ## Perses dashboard
 
 `up.sh` port-forwards [Perses](https://perses.dev) in the background. Open
-<http://localhost:8080/projects/demo-cluster/dashboards/demo-cluster-overview>
+<http://localhost:8081/projects/demo-cluster/dashboards/demo-cluster-overview>
 (no login). The port-forward dies with its pod or cluster (a reset, a Docker
 restart); bring it back with `./scripts/perses.sh`, stop it with
 `./scripts/perses.sh --stop`.
 
-The dashboard has 23 panels, refreshes every 5 seconds and shows the last 2
-minutes. From top to bottom:
+> **Perses moved from port 8080 to 8081.** Port 8080 now belongs to the demo
+> dashboard. Re-running `./scripts/up.sh` on an existing cluster moves the
+> Perses port-forward to 8081. If you set `PERSES_PORT=8080` yourself, drop
+> it: `up.sh` stops when both dashboards have the same port.
+
+The Perses dashboard has 23 panels, refreshes every 5 seconds and shows the
+last 2 minutes. From top to bottom:
 
 1. **Topology & services**: what runs where, and how to trigger each fault.
+   In Perses this is static Markdown text; the demo dashboard draws its live
+   topology instead.
 2. **Demo apps healthy · CrashLoopBackOff · OOMKills (last 5m) · Restarts
    (last 5m)**.
 3. **Composite Health Score**: one 0–100 number. It drops by 50 for any
-   CrashLoopBackOff, 20 and 30 for memory above 50% and 80% of a limit, 30 for
-   each app's 5xx rate above 1%, and 50 for any app pod not Ready.
+   CrashLoopBackOff in the last minute, 20 and 30 for memory above 50% and 80%
+   of a limit, 30 for each app's 5xx rate above 1%, 50 for any app pod not
+   Ready, and 30 for any OOMKill in the last 5 minutes.
 4. **Throughput · Latency p95 · Service errors % · Saturation**: the golden
    signals per app.
-5. **Restart rate per pod · Container restart events / min**.
+5. **Restart rate per pod · Container restart events** (one bar per restart).
 6. **Container restarts over time · Active fault states** (containers waiting
-   in CrashLoopBackOff, ImagePullBackOff and the like) **· K8sGPT detection
-   events**.
+   in CrashLoopBackOff, ImagePullBackOff and the like) **· K8sGPT new
+   Results**.
 7. **Memory growth rate**: the slope of each container's memory, the clearest
    signal of a slow leak.
 8. **K8sGPT diagnoses by Kind · LLM calls (errors + latency) · K8sGPT agent
@@ -384,8 +497,11 @@ a Perses `Dashboard` in the project `demo-cluster`. Next to it are the
 the ConfigMap `demo-cluster-perses` (label `perses.dev/resource=true`) in
 `monitoring`, and Perses re-reads them every 15 seconds. That also undoes
 changes made in the Perses UI: edit the files and re-run `./scripts/up.sh`.
+When you change a panel, make the same change in
+[`dashboard/web/dashboard.json`](dashboard/web/dashboard.json), so the two
+dashboards keep showing the same panels.
 
-How the dashboard was built, and the PromQL behind it:
+How the dashboards were built, and the PromQL behind them:
 [../docs/sre-dashboard-best-practices.md](../docs/sre-dashboard-best-practices.md).
 
 ## Slack (optional)
@@ -464,7 +580,7 @@ the Docker bridge address instead:
 |---|---|
 | `./scripts/soft-reset.sh` | Keeps the cluster. Stops the slow leak and the OOMKill loop, replaces the payments-api and recommend-svc pods, restarts Prometheus (wipes its data, so graphs start flat), restarts slack-relay (if Slack is on) and the watcher, then deletes all Results and leftover helm-test pods. |
 | `./scripts/reset.sh` | `down.sh`, then `up.sh`. Slower, but starts from scratch. |
-| `./scripts/down.sh` | Stops the Perses port-forward and the OOMKill loop, then deletes the cluster. |
+| `./scripts/down.sh` | Stops the demo dashboard and Perses port-forwards and the OOMKill loop, then deletes the cluster. |
 
 `down.sh` deletes the cluster through `kind delete cluster --name
 $CLUSTER_NAME` (or `k3d cluster delete $CLUSTER_NAME`), so it cannot touch
@@ -482,6 +598,7 @@ All scripts are in [`scripts/`](scripts) and work from any directory.
 | `down.sh` | Stops the background helpers, deletes the cluster. |
 | `reset.sh` | `down.sh` + `up.sh`. |
 | `soft-reset.sh` | Returns the cluster to its just-installed state (see above). |
+| `dashboard.sh [--stop]` | Starts or stops the demo dashboard port-forward. Refuses a port that is already in use. On port 8080 it first stops a Perses port-forward of this cluster that is still on that port, and says how to start it again. |
 | `perses.sh [--stop]` | Starts or stops the Perses port-forward. Refuses a port that is already in use. |
 | `trigger-oomkill.sh [--stop]` | Starts or stops the OOMKill loop on payments-api. |
 | `trigger-leak.sh [--rate N \| --off]` | Starts the leak at N MB/min (default 280, at least 1), or stops it. |
@@ -491,7 +608,7 @@ All scripts are in [`scripts/`](scripts) and work from any directory.
 | `check-slack.sh` | Posts a test message to `SLACK_WEBHOOK_URL`. |
 | `lib.sh`, `k8sgpt-lib.sh` | Helpers the other scripts source. |
 
-The Perses port-forward and the OOMKill loop run in the background. Their PID
+The two port-forwards and the OOMKill loop run in the background. Their PID
 files and logs are in `.run/<cluster>/` (gitignored). A script stops a process
 only if it is still the one it started.
 
@@ -503,6 +620,8 @@ only if it is still the one it started.
 | metrics-server | v0.9.0 |
 | kube-prometheus-stack chart | 91.9.0 (`oci://ghcr.io/prometheus-community/charts`, needs Helm 3.8+) |
 | perses chart | 0.24.0, Perses v0.55.0 (`https://perses.github.io/helm-charts`) |
+| demo-dashboard image | built from `golang:1.27.1`, runs on `gcr.io/distroless/static-debian13:nonroot` (both pinned by digest) |
+| uPlot, the chart library of the demo dashboard | 1.6.32, vendored in [`dashboard/web/vendor/`](dashboard/web/vendor) |
 | k8sgpt-operator chart | 0.2.29 (`https://charts.k8sgpt.ai`) |
 | K8sGPT | `ghcr.io/k8sgpt-ai/k8sgpt:v0.4.39` |
 | payments-api image | built from `golang:1.27.1-alpine3.24`, runs on `alpine:3.24.2` |
@@ -513,7 +632,7 @@ only if it is still the one it started.
 | watcher helm test | `docker.io/alpine/kubectl:1.37.1` (pinned by digest) |
 
 The chart and image versions are set at the top of
-[`scripts/up.sh`](scripts/up.sh) and in the manifests.
+[`scripts/up.sh`](scripts/up.sh), in the manifests and in the Dockerfiles.
 
 ## Troubleshooting
 
@@ -525,10 +644,15 @@ The chart and image versions are set at the top of
 | `kind create cluster` fails or the node never gets Ready | Too little memory for Docker, or kind is older than v0.33.0 | Give Docker at least 6 GB. Upgrade kind, or run `KIND_NODE_IMAGE= ./scripts/up.sh`. |
 | `kind cluster 'demo-cluster' not found` (or `k3d cluster ...`) | The cluster was deleted | `./scripts/up.sh` |
 | `context 'kind-demo-cluster' points at ...` or `your kubeconfig has no 'kind-demo-cluster' context` | Your kubeconfig lost or changed the cluster's entry | `kind export kubeconfig --name demo-cluster`, or on k3d `k3d kubeconfig merge demo-cluster --kubeconfig-merge-default` |
-| ImagePullBackOff on payments-api, recommend-svc or k8s-watcher | The image was not loaded into the cluster's node | `./scripts/up.sh` |
-| `port 8080 is already in use` | Something else listens on 8080 | `PERSES_PORT=8081 ./scripts/perses.sh` |
-| Perses stopped answering | The port-forward died with its pod, the cluster or Docker | `./scripts/perses.sh` |
-| The dashboard is missing or out of date | Perses has not re-read the ConfigMap yet, or rejected a file | Wait 15 seconds and reload. Check `kubectl --context kind-demo-cluster -n monitoring logs perses-0 -c perses`. |
+| ImagePullBackOff on payments-api, recommend-svc, demo-dashboard or k8s-watcher | The image was not loaded into the cluster's node | `./scripts/up.sh` |
+| `port 8080 is already in use` (or `port 8081`) | Something else listens on the demo dashboard's port (8080) or on Perses's port (8081) | `DASHBOARD_PORT=8082 ./scripts/dashboard.sh` or `PERSES_PORT=8083 ./scripts/perses.sh`. Give `up.sh` the same variable on later runs. |
+| `DASHBOARD_PORT and PERSES_PORT are both ...` | Both variables name the same port, for example a `PERSES_PORT=8080` kept from before Perses moved to 8081 | Unset `PERSES_PORT`, or give each dashboard its own port. |
+| An old Perses link on port 8080 answers `404 page not found` | Port 8080 is the demo dashboard now | Open Perses on port 8081 (see [Perses dashboard](#perses-dashboard)). |
+| The demo dashboard or Perses stopped answering | The port-forward died with its pod, the cluster or Docker | `./scripts/dashboard.sh` or `./scripts/perses.sh` |
+| The demo dashboard says that panels failed | Prometheus is restarting (`soft-reset.sh` restarts it) or cannot be reached | Wait for the next refresh. Check `kubectl --context kind-demo-cluster -n monitoring logs deploy/demo-dashboard`. |
+| Every panel of the demo dashboard says `open the dashboard at localhost or at an IP address` | The page was opened under another host name. The server answers queries only for `localhost` or an IP address, so that no other web site can read Prometheus through it | Open <http://localhost:8080>, or use the machine's IP address. |
+| The demo dashboard does not show a change made in `dashboard/web/` | The page is built into the image | `./scripts/up.sh` rebuilds the image and replaces the pod. |
+| The Perses dashboard is missing or out of date | Perses has not re-read the ConfigMap yet, or rejected a file | Wait 15 seconds and reload. Check `kubectl --context kind-demo-cluster -n monitoring logs perses-0 -c perses`. |
 | No Result a few minutes after `trigger-oomkill.sh` | K8sGPT has not caught the pod failing yet, or the operator has an error | Check `kubectl --context kind-demo-cluster -n demo-apps get pods` and the operator log: `kubectl --context kind-demo-cluster -n k8sgpt-system logs deploy/k8sgpt-operator-controller-manager` |
 | Results have no AI text | No `LLM_API_KEY`, a wrong key or model, or the operator stopped calling the LLM after failures | Check `.env` and re-run `./scripts/up.sh`. The `up.sh` header says whether AI explanations are on. |
 | AI text is identical to an earlier answer | K8sGPT cached it | `kubectl --context kind-demo-cluster -n k8sgpt-system patch k8sgpt k8sgpt-sample --type merge -p '{"spec":{"noCache":true}}'`. `up.sh` sets it back. |
@@ -552,6 +676,7 @@ demo-cluster/
 │   ├── slack-relay/      posts K8sGPT, watcher and Alertmanager findings to Slack
 │   └── slack-probe/      checks that the Slack webhook answers
 ├── helm/                 values for kube-prometheus-stack, Perses, the K8sGPT operator, the watcher
-├── perses/               the dashboard, its project and datasource
+├── dashboard/            the demo dashboard: Go server, page, panel file, Dockerfile, manifest
+├── perses/               the Perses dashboard, its project and datasource
 └── docs/                 running K8sGPT with LM Studio
 ```

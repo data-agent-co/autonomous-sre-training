@@ -83,7 +83,7 @@
         "spec": {
           "display": {
             "name": "CrashLoopBackOff",
-            "description": "Containers currently waiting in CrashLoopBackOff. Falls back to 0 when no pods match — keeps the panel showing a green '0' instead of 'No data' when everything is healthy."
+            "description": "Containers in CrashLoopBackOff in the last minute. The minute smooths over the few seconds the container runs between two crashes, when it is not waiting. Falls back to 0, so a healthy cluster shows a green 0 instead of No data."
           },
           "plugin": {
             "kind": "StatChart",
@@ -117,7 +117,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)",
+                    "query": "sum(max by (namespace, pod, container) (max_over_time(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"}[1m]) == 1) and on (namespace, pod) kube_pod_info{namespace=\"demo-apps\"}) or vector(0)",
                     "seriesNameFormat": "pods"
                   }
                 }
@@ -131,7 +131,7 @@
         "spec": {
           "display": {
             "name": "OOMKills (last 5m)",
-            "description": "Restarts attributable to OOM (container had OOMKilled state × number of restarts in window). The naive increase() on the OOMKilled gauge can't handle rapid CrashLoop cycles — this query is robust to that."
+            "description": "Container restarts in the last 5 minutes whose last termination was an OOMKill. Uses last_terminated_reason, which stays set after the container restarts, so every kill counts, also one that restarted at once. Rounded, because increase() extrapolates."
           },
           "plugin": {
             "kind": "StatChart",
@@ -169,7 +169,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "sum(max_over_time(kube_pod_container_status_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) * on(pod, container) group_left increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m])) or vector(0)",
+                    "query": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]) and on (namespace, pod, container) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) == 1))) or vector(0)",
                     "seriesNameFormat": "kills"
                   }
                 }
@@ -183,7 +183,7 @@
         "spec": {
           "display": {
             "name": "Restarts (last 5m)",
-            "description": "Total container restarts in demo-apps within the last 5 minutes"
+            "description": "Container restarts in demo-apps in the last 5 minutes. Rounded, because increase() extrapolates."
           },
           "plugin": {
             "kind": "StatChart",
@@ -198,7 +198,7 @@
                 "defaultColor": "#73bf69",
                 "steps": [
                   {
-                    "value": 1.5,
+                    "value": 1,
                     "color": "#fade2a"
                   },
                   {
@@ -221,7 +221,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]))) or on() vector(0)",
+                    "query": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]))) or on() vector(0)",
                     "seriesNameFormat": "restarts"
                   }
                 }
@@ -235,7 +235,7 @@
         "spec": {
           "display": {
             "name": "Composite Health Score (0-100, lower = worse)",
-            "description": "Aggregate health score, 0-100 (higher = healthier). Read the score AND the hover on which term is firing.\n\nFormula (each term is subtracted independently, so multiple hits stack):\n  100 (baseline)\n  −50 · CrashLoopBackOff on any demo-apps container\n  −20 · memory working-set > 50% of limit (any container)\n  −30 · memory working-set > 80% of limit (any container)\n  −30 · payments-api HTTP 5xx rate > 1% (1m window)\n  −30 · recommend-svc HTTP 5xx rate > 1% (1m window)\n  −50 · any demo-apps pod not Ready (payments-api / recommend-svc / catalog-svc)\n\nColour bands:\n  ≥ 70 = green (healthy)\n  40–69 = yellow (degraded)\n  <  40 = red (critical)\n\nThe whole point of this panel: detect any of the demo's faults\nwithout knowing the root cause. When it turns red, drill down to the\nLTES row below to see which golden signal is affected."
+            "description": "Aggregate health score, 0-100 (higher = healthier). Read the score AND the hover on which term is firing.\n\nFormula (each term is subtracted independently, so multiple hits stack):\n  100 (baseline)\n  −50 · CrashLoopBackOff on any demo-apps container (in the last minute)\n  −20 · memory working-set > 50% of limit (any container)\n  −30 · memory working-set > 80% of limit (any container)\n  −30 · payments-api HTTP 5xx rate > 1% (1m window)\n  −30 · recommend-svc HTTP 5xx rate > 1% (1m window)\n  −50 · any demo-apps pod not Ready (payments-api / recommend-svc / catalog-svc)\n  −30 · any OOMKill in demo-apps in the last 5 minutes\n\nColour bands:\n  ≥ 80 = green (healthy)\n  50–79 = yellow (degraded)\n  <  50 = red (critical)\n\nThe whole point of this panel: detect any of the demo's faults\nwithout knowing the root cause. When it turns red, drill down to the\nLTES row below to see which golden signal is affected."
           },
           "plugin": {
             "kind": "StatChart",
@@ -274,7 +274,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "clamp_min(100 - (((sum(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)) > bool 0) * 50) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.5) * 20) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.8) * 30) - (((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((min(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", condition=\"true\"}) or vector(1)) < bool 1) * 50), 0)",
+                    "query": "clamp_min(100 - (((sum(max by (namespace, pod, container) (max_over_time(kube_pod_container_status_waiting_reason{namespace=\"demo-apps\", reason=\"CrashLoopBackOff\"}[1m]) == 1) and on (namespace, pod) kube_pod_info{namespace=\"demo-apps\"}) or vector(0)) > bool 0) * 50) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.5) * 20) - (((max(sum by(namespace, pod, container) (container_memory_working_set_bytes{namespace=\"demo-apps\", container!=\"\", container!=\"POD\"}) / on(namespace, pod, container) sum by(namespace, pod, container) (kube_pod_container_resource_limits{namespace=\"demo-apps\", resource=\"memory\"})) or vector(0)) > bool 0.8) * 30) - (((sum(rate(payments_api_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(payments_api_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((sum(rate(recommend_svc_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(recommend_svc_http_requests_total[1m])), 0.001) or vector(0)) > bool 0.01) * 30) - (((min(kube_pod_status_ready{namespace=\"demo-apps\", pod=~\"(payments-api|recommend-svc|catalog-svc)-.*\", condition=\"true\"}) or vector(1)) < bool 1) * 50) - (((sum(increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m]) and on (namespace, pod, container) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=\"demo-apps\", reason=\"OOMKilled\"}[5m]) == 1)) or vector(0)) > bool 0) * 30), 0)",
                     "seriesNameFormat": "health"
                   }
                 }
@@ -669,8 +669,8 @@
         "kind": "Panel",
         "spec": {
           "display": {
-            "name": "Restart rate per pod (1m window)",
-            "description": "rate(restarts/sec). Goes high during CrashLoopBackOff cycles, returns to 0 when stable. The cleanest live signal of an ongoing fault."
+            "name": "Restart rate per pod (5m window)",
+            "description": "Restarts per second over 5 minutes. A 5-minute window covers the kubelet's back-off between crashes (up to 5 minutes), so a crash loop does not drop to 0 between restarts."
           },
           "plugin": {
             "kind": "TimeSeriesChart",
@@ -708,7 +708,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "topk(6, (sum by (namespace, pod, container) (rate(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "query": "topk(6, (sum by (namespace, pod, container) (rate(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[5m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
                     "seriesNameFormat": "{{container}} @ {{pod}}"
                   }
                 }
@@ -721,8 +721,8 @@
         "kind": "Panel",
         "spec": {
           "display": {
-            "name": "Container restart events / min",
-            "description": "increase(restart_total)[1m] per pod, rendered as bars. Each bar is a new container restart in that minute. In this demo the OOMKill victim restarts only when OOMed, so this also functions as an OOMKill rate panel — but it's robust to kube-state-metrics' sparse emission of the OOMKilled gauge during long backoff. Drops to 0 once the pod stabilizes."
+            "name": "Container restart events",
+            "description": "One bar per container restart, at the point it happened: the restart count minus its value one step ($__interval) earlier. A fixed 1-minute window would draw the same restart at every point of that minute."
           },
           "plugin": {
             "kind": "TimeSeriesChart",
@@ -755,7 +755,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "topk(6, (sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}[1m])) and on (namespace, pod) (kube_pod_status_phase{namespace=\"demo-apps\", phase=\"Running\"} == 1))) or on() vector(0)",
+                    "query": "topk(6, (sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}) - sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"} offset $__interval)) > 0 or 0 * sum by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"demo-apps\"}))",
                     "seriesNameFormat": "{{container}} @ {{pod}}"
                   }
                 }
@@ -819,8 +819,8 @@
         "kind": "Panel",
         "spec": {
           "display": {
-            "name": "K8sGPT detection events (per minute)",
-            "description": "Each bar marks WHEN K8sGPT created a new Result (and, with Slack on, posted it) — bar height = number of new Result CRDs that landed in that 1-minute window. Flat-zero baseline means no recent detections; vertical spikes are the exact moments the agent fired. More telling than a cumulative count: when you trigger OOMKill at T+10s and a bar appears at ~T+30s, you see the agent reacting in real time. Sourced from delta(k8sgpt_number_of_results[1m]), clamped to 0 to suppress the dips when Result CRDs are garbage-collected."
+            "name": "K8sGPT new Results",
+            "description": "One bar each time K8sGPT creates a Result (and, with Slack on, posts it): the Results that exist now but did not one step ($__interval) earlier. Source: k8sgpt_result_info, which kube-state-metrics exports from the Result objects themselves. The operator's own k8sgpt_number_of_results gauge is not used: it never goes back to 0 after the Results are deleted."
           },
           "plugin": {
             "kind": "TimeSeriesChart",
@@ -850,8 +850,8 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "clamp_min(sum by (object_namespace) (delta(k8sgpt_number_of_results[1m])), 0) or on() vector(0)",
-                    "seriesNameFormat": "{{object_namespace}}"
+                    "query": "sum(count by (name) (k8sgpt_result_info unless on (name) (k8sgpt_result_info offset $__interval))) or on() vector(0)",
+                    "seriesNameFormat": "new Results"
                   }
                 }
               }
@@ -974,8 +974,8 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or on() vector(0)",
-                    "seriesNameFormat": "failed / sec ({{backend}})"
+                    "query": "sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or on() vector(0)",
+                    "seriesNameFormat": "failed LLM calls / sec"
                   }
                 }
               }
@@ -990,7 +990,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "(rate(k8sgpt_reconcile_error_count[5m])) or on() vector(0)",
+                    "query": "sum(rate(k8sgpt_reconcile_error_count[5m])) or on() vector(0)",
                     "seriesNameFormat": "reconcile errors / sec"
                   }
                 }
@@ -1127,7 +1127,7 @@
         "spec": {
           "display": {
             "name": "K8sGPT diagnoses by Kind",
-            "description": "Currently-active K8sGPT Result CRDs grouped by the Kubernetes Kind that triggered them (Pod, Service, Deployment, etc.). When the cluster is healthy this shows only the Slack sink row (or No data without Slack). During a fault each row is one K8sGPT finding (with an AI explanation when an LLM is configured). Refreshes from k8sgpt_number_of_results_by_type emitted by the operator."
+            "description": "The K8sGPT Result objects that exist now, one row each: the Kind and resource K8sGPT flagged and the LLM backend that explained it. Source: k8sgpt_result_info from kube-state-metrics. With Slack on, the last row shows whether the Slack webhook is reachable."
           },
           "plugin": {
             "kind": "Table",
@@ -1138,34 +1138,57 @@
                 {
                   "name": "kind",
                   "header": "Kind",
-                  "align": "left"
+                  "align": "left",
+                  "width": 90
                 },
                 {
-                  "name": "name",
+                  "name": "object",
                   "header": "Resource",
                   "align": "left"
                 },
                 {
-                  "name": "object_namespace",
-                  "header": "Namespace",
-                  "align": "left"
+                  "name": "backend",
+                  "header": "LLM",
+                  "align": "left",
+                  "width": 80
                 },
                 {
-                  "name": "value",
-                  "header": "Count / status",
+                  "name": "status",
+                  "header": "Status",
                   "align": "left",
                   "cellSettings": [
                     {
                       "condition": {
                         "kind": "Value",
                         "spec": {
-                          "value": "0"
+                          "value": "found"
                         }
                       },
-                      "text": "✗ unreachable",
+                      "text": "found",
+                      "textColor": "#fade2a"
+                    },
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "reachable"
+                        }
+                      },
+                      "text": "reachable",
+                      "textColor": "#73bf69"
+                    },
+                    {
+                      "condition": {
+                        "kind": "Value",
+                        "spec": {
+                          "value": "unreachable"
+                        }
+                      },
+                      "text": "unreachable",
                       "textColor": "#f2495c"
                     }
-                  ]
+                  ],
+                  "width": 100
                 }
               ]
             }
@@ -1181,7 +1204,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "(k8sgpt_number_of_results_by_type or label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"}, \"kind\", \"Slack sink\", \"webhook\", \".*\"), \"name\", \"incidents-demo (webhook)\", \"webhook\", \".*\"), \"object_namespace\", \"—\", \"webhook\", \".*\"))",
+                    "query": "label_replace(k8sgpt_result_info, \"status\", \"found\", \"\", \"\") or label_replace(label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"} == 1, \"kind\", \"Slack sink\", \"\", \"\"), \"object\", \"incidents-demo (webhook)\", \"\", \"\"), \"backend\", \"—\", \"\", \"\"), \"status\", \"reachable\", \"\", \"\") or label_replace(label_replace(label_replace(label_replace(slack_webhook_up{webhook=\"incidents-demo\"} == 0, \"kind\", \"Slack sink\", \"\", \"\"), \"object\", \"incidents-demo (webhook)\", \"\", \"\"), \"backend\", \"—\", \"\", \"\"), \"status\", \"unreachable\", \"\", \"\")",
                     "instant": true
                   }
                 }
@@ -1195,7 +1218,7 @@
         "spec": {
           "display": {
             "name": "K8sGPT agent — Health",
-            "description": "Composite 0-100 score for the K8sGPT agent. 100 = no errors. Subtracts 30 per active error mode (failed AI calls / reconcile errors) when either exceeds 0.1/s averaged over 5 minutes. The agent's own watchdog — separate from the cluster's health."
+            "description": "Composite 0-100 score for the K8sGPT agent. 100 = no errors. Subtracts 50 when any LLM call failed in the last 5 minutes and 50 when any reconcile failed, so an unreachable LLM (both) reads 0. A rate threshold cannot work here: K8sGPT reconciles about every 30 seconds, so even when every reconcile fails the error rate stays near 0.03/s. The agent's own watchdog, separate from the cluster's health."
           },
           "plugin": {
             "kind": "StatChart",
@@ -1233,7 +1256,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "sum(clamp_min(100 - 30 * ((rate(k8sgpt_number_of_failed_backend_ai_calls[5m]) > bool 0.1) or vector(0)) - 30 * ((rate(k8sgpt_reconcile_error_count[5m]) > bool 0.1) or vector(0)), 0))",
+                    "query": "clamp_min(100 - 50 * ((sum(increase(k8sgpt_number_of_failed_backend_ai_calls[5m])) > bool 0) or vector(0)) - 50 * ((sum(increase(k8sgpt_reconcile_error_count[5m])) > bool 0) or vector(0)), 0)",
                     "seriesNameFormat": "Health"
                   }
                 }
@@ -1247,7 +1270,7 @@
         "spec": {
           "display": {
             "name": "K8sGPT agent — Reconciles/s",
-            "description": "Throughput. A 'reconcile' is one iteration of the K8sGPT controller's main work loop — it wakes up when a watched resource changes (or on a periodic tick), scans the cluster, calls the LLM (when configured), writes Result CRDs, and posts to Slack (when configured). This is the rate of those iterations per second. K8sGPT's controller-runtime default re-sync is ~10 minutes, so 0 in a 5-minute window during idle is normal (shown as blue, not red). Only worry if it's still 0 during an active fault. Source: controller_runtime_reconcile_total{controller=\"k8sgpt\"}."
+            "description": "Throughput. A 'reconcile' is one iteration of the K8sGPT controller's main work loop — it wakes up when a watched resource changes (or on a periodic tick), scans the cluster, calls the LLM (when configured), writes Result CRDs, and posts to Slack (when configured). This is the rate of those iterations per second. In this cluster the operator reconciles about every 30 seconds, so a working agent reads about 0.03 per second on a green tile. 0 means it did not reconcile in the last 5 minutes: the tile is then blue, not red. Only worry if it's still 0 during an active fault. Source: controller_runtime_reconcile_total{controller=\"k8sgpt\"}."
           },
           "plugin": {
             "kind": "StatChart",
@@ -1353,7 +1376,7 @@
         "spec": {
           "display": {
             "name": "K8sGPT agent — Errors/s",
-            "description": "Errors. Combined rate of two failure types per second: failed LLM calls (k8sgpt_number_of_failed_backend_ai_calls — rate limits, auth issues, network drops) AND controller reconcile errors (k8sgpt_reconcile_error_count — anything the controller couldn't process). Both feed the Health composite. Spikes during quota burn."
+            "description": "Errors. Failed LLM calls (k8sgpt_number_of_failed_backend_ai_calls: unreachable LLM, rate limits, auth) plus controller reconcile errors (k8sgpt_reconcile_error_count), per second over 5 minutes. Each term falls back to 0 on its own, because the failed-call counter exists only after the first failure. K8sGPT reconciles about every 30 seconds, so every reconcile failing reads about 0.03/s plus 0.03/s: warning from 0.001, critical from 0.02."
           },
           "plugin": {
             "kind": "StatChart",
@@ -1369,11 +1392,11 @@
                 "defaultColor": "#73bf69",
                 "steps": [
                   {
-                    "value": 0.05,
+                    "value": 0.001,
                     "color": "#fade2a"
                   },
                   {
-                    "value": 0.2,
+                    "value": 0.02,
                     "color": "#f2495c"
                   }
                 ]
@@ -1392,7 +1415,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "(sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) + sum(rate(k8sgpt_reconcile_error_count[5m]))) or on() vector(0)",
+                    "query": "(sum(rate(k8sgpt_number_of_failed_backend_ai_calls[5m])) or vector(0)) + (sum(rate(k8sgpt_reconcile_error_count[5m])) or vector(0))",
                     "seriesNameFormat": "Errors/s"
                   }
                 }
@@ -1406,7 +1429,7 @@
         "spec": {
           "display": {
             "name": "K8sGPT agent — Saturation",
-            "description": "Saturation. Percentage of the controller's worker pool currently busy: active_workers / max_concurrent_reconciles × 100. K8sGPT defaults to max=1 worker, so this is 0% idle or 100% busy. Holds at 100% while an LLM call is in flight — sustained 100% means slow LLM is bottlenecking throughput even if errors are low."
+            "description": "Saturation. Share of the last minute the controller's workers spent reconciling: reconcile seconds per second divided by max_concurrent_reconciles (1 for K8sGPT), as a percent. A slow LLM makes each reconcile longer and pushes this up; 100% means the worker never rests and reconciles queue up. Sampling active_workers instead would almost always read 0, because a reconcile lasts well under the 5-second scrape interval."
           },
           "plugin": {
             "kind": "StatChart",
@@ -1414,7 +1437,7 @@
               "calculation": "last-number",
               "format": {
                 "unit": "percent",
-                "decimalPlaces": 0
+                "decimalPlaces": 1
               },
               "colorMode": "background_solid",
               "legendMode": "off",
@@ -1445,7 +1468,7 @@
                       "kind": "PrometheusDatasource",
                       "name": "prometheus"
                     },
-                    "query": "((sum(controller_runtime_active_workers{controller=\"k8sgpt\"}) / clamp_min(sum(controller_runtime_max_concurrent_reconciles{controller=\"k8sgpt\"}), 1)) * 100) or on() vector(0)",
+                    "query": "clamp_max(sum(rate(controller_runtime_reconcile_time_seconds_sum{controller=\"k8sgpt\"}[1m])) / clamp_min(sum(controller_runtime_max_concurrent_reconciles{controller=\"k8sgpt\"}), 1) * 100, 100) or on() vector(0)",
                     "seriesNameFormat": "Saturation"
                   }
                 }
