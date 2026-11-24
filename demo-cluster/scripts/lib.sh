@@ -61,6 +61,44 @@ cluster_exists() {
   esac
 }
 
+# cluster_stopped_nodes: print the names of $CLUSTER_NAME's node containers
+# that are not running, one per line (nothing when all are up). A cluster
+# whose containers were stopped (podman stop, a podman machine or Docker
+# restart) still "exists", but kind and k3d cannot exec into its nodes.
+cluster_stopped_nodes() {
+  local label
+  case "$CLUSTER_PROVIDER" in
+    kind) label="io.x-k8s.kind.cluster=$CLUSTER_NAME" ;;
+    k3d) label="k3d.cluster=$CLUSTER_NAME" ;;
+  esac
+  # k3d's short-lived k3d-NAME-tools helper is not a node; skip it.
+  container_cli ps -a --filter "label=$label" --format '{{.Names}} {{.State}}' \
+    | awk -v tools="k3d-$CLUSTER_NAME-tools" '$1 != tools && $2 != "running" { print $1 }'
+}
+
+# start_cluster: start $CLUSTER_NAME's stopped node containers and wait for
+# its API server and nodes to be ready.
+start_cluster() {
+  case "$CLUSTER_PROVIDER" in
+    kind)
+      local nodes
+      nodes="$(cluster_stopped_nodes)"
+      # shellcheck disable=SC2086  # one container name per word
+      [[ -z "$nodes" ]] || container_cli start $nodes
+      ;;
+    k3d) k3d cluster start "$CLUSTER_NAME" ;;
+  esac
+  local deadline=$((SECONDS + 120))
+  until demo_kubectl get --raw=/readyz >/dev/null 2>&1; do
+    if ((SECONDS >= deadline)); then
+      echo "ERROR: $CLUSTER_PROVIDER cluster '$CLUSTER_NAME' API server not ready after 120s." >&2
+      return 1
+    fi
+    sleep 2
+  done
+  demo_kubectl wait --for=condition=Ready nodes --all --timeout=120s
+}
+
 # cluster_kubeconfig: print the kubeconfig $CLUSTER_PROVIDER holds for
 # $CLUSTER_NAME.
 cluster_kubeconfig() {
@@ -144,6 +182,13 @@ demo_cluster_check() {
   set_kind_provider
   if ! cluster_exists; then
     echo "ERROR: $CLUSTER_PROVIDER cluster '$CLUSTER_NAME' not found. Create it with ${RUN_PREFIX}./scripts/up.sh." >&2
+    return 1
+  fi
+  local stopped
+  stopped="$(cluster_stopped_nodes)"
+  if [[ -n "$stopped" ]]; then
+    echo "ERROR: $CLUSTER_PROVIDER cluster '$CLUSTER_NAME' is stopped (not running: ${stopped//$'\n'/ })." >&2
+    echo "       Start it with ${RUN_PREFIX}./scripts/up.sh." >&2
     return 1
   fi
   local ctx_cluster have want

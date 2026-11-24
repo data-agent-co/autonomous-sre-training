@@ -202,6 +202,12 @@ optional_step() { run_step optional "$@"; }
 do_cluster() {
   if cluster_exists; then
     echo "$CLUSTER_PROVIDER cluster '$CLUSTER_NAME' already exists, reusing it"
+    local stopped
+    stopped="$(cluster_stopped_nodes)"
+    if [[ -n "$stopped" ]]; then
+      echo "Starting stopped node containers: ${stopped//$'\n'/ }"
+      start_cluster
+    fi
   elif [[ "$CLUSTER_PROVIDER" == "k3d" ]]; then
     # One node, as with kind (kind-config.yaml): the demo's memory budget and
     # the README's cluster diagram assume a single node. The k3s server
