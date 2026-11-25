@@ -386,13 +386,17 @@ cannot change anything in Prometheus.
 
 ### Topology
 
-The topology card draws the `demo-apps` namespace from live Prometheus data:
+The topology card draws two layers from live Prometheus data: the `demo-apps`
+namespace, and under it the control plane that reads the apps.
+
+The demo apps:
 
 - **Traffic source.** The box labelled Traffic is loadgen. While loadgen runs,
   it shows the total request rate. An edge runs from it to each app it calls:
   payments-api and recommend-svc.
 - **Nodes.** One box each for payments-api, recommend-svc and catalog-svc.
-  catalog-svc stands apart with no edge, because it gets no traffic. A node is
+  catalog-svc stands apart, because it gets no traffic: a thin grey line
+  joins it to the other two, with no edge from Traffic. A node is
   green while its pod is healthy. It turns amber when the pod serves but
   something is or was wrong: a container is starting, memory is at 50% of the
   limit or more, a container restarted in the last 5 minutes or was OOMKilled
@@ -406,7 +410,12 @@ The topology card draws the `demo-apps` namespace from live Prometheus data:
 - **Ports.** The marks on a node's bottom edge show who reads it. `metrics`
   is lit while Prometheus scrapes the app, `scan` while K8sGPT is running.
   catalog-svc has no `metrics` port, because it has no `/metrics` endpoint.
-  The two chips under the diagram are the legend.
+  Each kind of mark joins one line, and the line runs down into its reader
+  in the control plane: `metrics` into Prometheus, `scan` into K8sGPT. A
+  line is coloured and moves while its mark is lit. In a narrow window the
+  boxes of the control plane stand one above the other, and the `scan` line
+  ends at a dot on the control plane's top edge. The footnote under the
+  control plane is the legend.
 - **Fault badges.** F1 on payments-api is the
   [OOMKill](#1-oomkill-payments-api), F2 on recommend-svc the
   [memory leak](#2-slow-memory-leak-recommend-svc). A badge is grey while its
@@ -420,9 +429,81 @@ The topology card draws the `demo-apps` namespace from live Prometheus data:
   opens what Perses shows as its first panel: the apps with their fault
   triggers, and the detection layers.
 
-Hover over a node, a port or a badge for the details. An idle badge names the
-script that triggers its fault. The Tab key reaches the Traffic box and the
-nodes too, and a screen reader reads the same details there.
+The control plane:
+
+- **Boxes.** Prometheus, K8sGPT and Slack: who reads the apps, and where the
+  findings go. The tag next to a name says what the box may do: Prometheus
+  and K8sGPT only read, and Slack is the one box that posts to your channel.
+  With a cloud LLM, K8sGPT's calls leave the cluster too.
+- **Stage strips.** The strip under a box's name is what the box does, in
+  order: Scrape, Rule, Alert for Prometheus; Scan, Result, Explanation for
+  K8sGPT; Relay, Webhook for Slack. A stage shows a green check while it
+  works, an amber dot while something passes through it (the alert fires,
+  Results exist), a red cross when it failed and a grey ring when there is
+  nothing to say. A grey half-full dot reads "set": the thing is configured
+  and nothing shows yet that it works. A fault shows as it travels: Alert
+  turns amber seconds after an OOMKill, Result a few restarts later.
+- **Rows.** The parts of a box, each with a dot in the same colours and
+  shapes.
+  Prometheus: the two app targets, kube-state-metrics, the alert rule
+  `DemoContainerOOMKilled` and Alertmanager. K8sGPT: the operator, the
+  scanner, the LLM and the watcher. Slack: slack-relay and the webhook.
+- **Results.** Under the rows of K8sGPT: the Result objects that exist now,
+  up to four, with their kind and their object. The tag at the end of a row
+  is the Result's backend as set in the K8sGPT resource, or
+  `k8sgpt-detection-pack:cm` for a Result the watcher wrote. It names the
+  API, not the model: `openai` also stands for a local model, Claude and
+  Groq, which speak its API. The LLM row names the model. K8sGPT writes the
+  backend into every Result, with the LLM off too; the list leaves the tag
+  out while the LLM is off. While the LLM row is red, new Results carry the
+  tag without AI text.
+- **Paths to Slack.** Two lines end in the Slack box: Results from K8sGPT,
+  and alerts from Prometheus through Alertmanager. A line is grey while its
+  path exists, and blue and moving while there is something for it to
+  carry: a Result exists ("Results exist"), or the alert fires ("alerts
+  firing"). That is not a post in progress: slack-relay posts a K8sGPT
+  problem once and each change of a watched ConfigMap, and Alertmanager
+  posts a firing alert once, again after 24 hours. A line is faint and
+  dotted while its path is not there: Slack is off, or slack-relay (for
+  alerts also Alertmanager) is not up. The box says which. The alerts line
+  trusts `up.sh` to set the Alertmanager route and the relay together.
+  `up.sh` changes the route at its kube-prometheus-stack step and adds or
+  removes the relay at its Slack step, about half a minute later; until
+  then, or for good if the run stops between the two, the line can show a
+  path that is not there.
+- **Slack off.** Without `SLACK_WEBHOOK_URL` the Slack box is grey and
+  dashed, its slack-relay row reads "not deployed", its other rows read
+  "off" and both lines are faint and dotted. That is a normal state. The
+  LLM row of K8sGPT reads "off" the same way while no LLM is set.
+- **"no data".** A row says "off", and the Results say "none", only while
+  Prometheus can tell. Most of the control plane's state comes from
+  kube-state-metrics. While that is not scraped, or right after Prometheus
+  restarted (`soft-reset.sh` restarts it), the rows say "no data" instead,
+  and the kube-state-metrics row of the Prometheus box says why.
+- **LLM set, not yet proven.** With an LLM set, the LLM row and the
+  Explanation stage read "set", in grey, until a Result of K8sGPT exists:
+  K8sGPT asks the LLM only when it finds a problem, so before the first
+  fault nothing shows that the LLM answers. They turn green while such a
+  Result exists and no Analyze call failed in the last 5 minutes (and
+  fewer than 7 since the operator started).
+- **Analyze calls that fail.** The LLM row and the Explanation stage turn
+  red while Analyze calls failed in the last 5 minutes, or once 7 or more
+  have failed since the operator started. The operator counts every failed
+  Analyze call while the LLM is on, whatever the error, and the 7 need not
+  be in a row, so the red can outlast an LLM that answers again. Only the
+  operator's log says whether it stopped asking the LLM: look for
+  `Disabled AI backend`. `./scripts/up.sh` restarts the operator, which
+  clears the count. The first failed call after the operator started does
+  not show: Prometheus sees no rise in a counter that starts at 1.
+
+The LLM row reads a metric that `up.sh` adds to kube-state-metrics,
+`k8sgpt_config_ai_info`. On a cluster that was built before this layer
+existed, re-run `./scripts/up.sh` once. Until then the row reads "no data".
+
+Hover over a node, a port, a badge, a stage, a row or the name of a line for
+the details. An idle badge names the script that triggers its fault. The Tab
+key reaches the Traffic box, the nodes and the boxes of the control plane
+too, and a screen reader reads the same details there.
 
 ### Panels
 
@@ -652,9 +733,10 @@ The chart and image versions are set at the top of
 | The demo dashboard says that panels failed | Prometheus is restarting (`soft-reset.sh` restarts it) or cannot be reached | Wait for the next refresh. Check `kubectl --context kind-demo-cluster -n monitoring logs deploy/demo-dashboard`. |
 | Every panel of the demo dashboard says `open the dashboard at localhost or at an IP address` | The page was opened under another host name. The server answers queries only for `localhost` or an IP address, so that no other web site can read Prometheus through it | Open <http://localhost:8080>, or use the machine's IP address. |
 | The demo dashboard does not show a change made in `dashboard/web/` | The page is built into the image | `./scripts/up.sh` rebuilds the image and replaces the pod. |
+| The topology's LLM row reads "no data" | kube-state-metrics does not export `k8sgpt_config_ai_info` yet: the cluster was built before the topology had its control plane. Or kube-state-metrics is not scraped: its row in the Prometheus box says so | `./scripts/up.sh` |
 | The Perses dashboard is missing or out of date | Perses has not re-read the ConfigMap yet, or rejected a file | Wait 15 seconds and reload. Check `kubectl --context kind-demo-cluster -n monitoring logs perses-0 -c perses`. |
 | No Result a few minutes after `trigger-oomkill.sh` | K8sGPT has not caught the pod failing yet, or the operator has an error | Check `kubectl --context kind-demo-cluster -n demo-apps get pods` and the operator log: `kubectl --context kind-demo-cluster -n k8sgpt-system logs deploy/k8sgpt-operator-controller-manager` |
-| Results have no AI text | No `LLM_API_KEY`, a wrong key or model, or the operator stopped calling the LLM after failures | Check `.env` and re-run `./scripts/up.sh`. The `up.sh` header says whether AI explanations are on. |
+| Results have no AI text, or the topology's LLM row reads "Analyze calls failed ..." | No `LLM_API_KEY`, a wrong key or model, the operator stopped calling the LLM after failures, or 7 Analyze calls failed since the operator started (not necessarily in a row) | Check `.env` and re-run `./scripts/up.sh`. The `up.sh` header says whether AI explanations are on. |
 | AI text is identical to an earlier answer | K8sGPT cached it | `kubectl --context kind-demo-cluster -n k8sgpt-system patch k8sgpt k8sgpt-sample --type merge -p '{"spec":{"noCache":true}}'`. `up.sh` sets it back. |
 | `check-slack.sh` prints `FAIL` | The webhook URL is wrong or was revoked | Create a new webhook and update `.env`. |
 | No Slack post, but `check-slack.sh` works | Slack was off when `up.sh` ran, or the relay dropped a repeat | Re-run `./scripts/up.sh` (it also restarts the relay when the webhook changed). Check `kubectl --context kind-demo-cluster -n k8sgpt-system logs deploy/slack-relay`. |

@@ -36,15 +36,24 @@ alertmanager:
         memory: 128Mi
         cpu: 100m
 
-# Exports one k8sgpt_result_info series per K8sGPT Result object, for the
-# dashboards' "K8sGPT new Results" and "K8sGPT diagnoses by Kind" panels. The
-# operator's own k8sgpt_number_of_results gauge cannot be used: it keeps its
-# last count after the Results are deleted.
+# Exports two metrics from the custom resources of K8sGPT:
+#
+# - k8sgpt_result_info: one series per K8sGPT Result object, for the
+#   dashboards' "K8sGPT new Results" and "K8sGPT diagnoses by Kind" panels
+#   and for the control plane in the demo dashboard's topology. The
+#   operator's own k8sgpt_number_of_results gauge cannot be used: it keeps
+#   its last count after the Results are deleted.
+# - k8sgpt_config_ai_info: one series per K8sGPT resource, with three of its
+#   LLM settings (spec.ai) as labels: enabled, backend and model. The LLM row
+#   of that control plane reads it: nothing else tells Prometheus whether the
+#   LLM is on. The API key is not exported: the resource only names the
+#   Secret that holds it, and that name is not a label either. Neither is
+#   the base URL, which can carry a token of its own.
 kube-state-metrics:
   rbac:
     extraRules:
       - apiGroups: [core.k8sgpt.ai]
-        resources: [results]
+        resources: [results, k8sgpts]
         verbs: [list, watch]
   customResourceState:
     enabled: true
@@ -69,6 +78,23 @@ kube-state-metrics:
                       kind: [spec, kind]
                       object: [spec, name]
                       backend: [spec, backend]
+          - groupVersionKind:
+              group: core.k8sgpt.ai
+              version: v1alpha1
+              kind: K8sGPT
+            metricNamePrefix: k8sgpt_config
+            labelsFromPath:
+              name: [metadata, name]
+            metrics:
+              - name: ai_info
+                help: One series per K8sGPT resource, with its LLM settings. The API key is not exported.
+                each:
+                  type: Info
+                  info:
+                    labelsFromPath:
+                      enabled: [spec, ai, enabled]
+                      backend: [spec, ai, backend]
+                      model: [spec, ai, model]
 
 # Disable bits we don't need on a laptop demo.
 kubeApiServer:

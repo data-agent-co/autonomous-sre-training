@@ -51,7 +51,64 @@ const ICONS = {
     ['circle', { cx: 10.5, cy: 10.5, r: 6 }],
     ['path', { d: 'M15 15l5 5' }],
   ],
+
+  // The control plane. A box and a row name their icon in dashboard.json.
+
+  // A pulse line: Prometheus.
+  prometheus: [['path', { d: 'M3 12.5h4l2.5-7 4.5 13 2.5-6h4.5' }]],
+  // A hash, as before the name of a channel: Slack.
+  slack: [['path', { d: 'M9.5 4 8 20M16 4l-1.5 16M4.5 9h15.5M4 15h15.5' }]],
+  // A key: the box that posts to your Slack channel.
+  key: [
+    ['circle', { cx: 8, cy: 15.5, r: 4 }],
+    ['path', { d: 'M11 12.5l9-9' }],
+    ['path', { d: 'M16 7.5l3 3' }],
+  ],
+  // A check and a cross: a stage that works, and one that failed.
+  check: [['path', { d: 'M5 12.5l4.5 4.5L19 7.5' }]],
+  cross: [['path', { d: 'M6.5 6.5l11 11M17.5 6.5l-11 11' }]],
+  // Layers: kube-state-metrics, the state of the cluster's objects.
+  layers: [
+    ['path', { d: 'M12 4l8 4-8 4-8-4z' }],
+    ['path', { d: 'M4 12l8 4 8-4' }],
+    ['path', { d: 'M4 16l8 4 8-4' }],
+  ],
+  // A bell: Alertmanager.
+  bell: [
+    ['path', { d: 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z' }],
+    ['path', { d: 'M10 21a2.2 2.2 0 0 0 4 0' }],
+  ],
+  // Two arrows that chase each other: the operator's reconcile loop.
+  loop: [
+    ['path', { d: 'M5 10.5a7.2 7.2 0 0 1 13-2.5' }],
+    ['path', { d: 'M18.5 3.5V8H14' }],
+    ['path', { d: 'M19 13.5a7.2 7.2 0 0 1-13 2.5' }],
+    ['path', { d: 'M5.5 20.5V16H10' }],
+  ],
+  // A four-pointed spark: the LLM.
+  spark: [['path', { d: 'M12 3.5l2 6.5 6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2z' }]],
+  // An eye: the watcher.
+  eye: [
+    ['path', { d: 'M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z' }],
+    ['circle', { cx: 12, cy: 12, r: 2.5 }],
+  ],
+  // A paper plane: slack-relay, which sends.
+  send: [
+    ['path', { d: 'M20.5 3.5l-17 7 6.5 3 3 6.5z' }],
+    ['path', { d: 'M20.5 3.5L10 13.5' }],
+  ],
+  // Two links of a chain: the webhook.
+  link: [
+    ['path', { d: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1' }],
+    ['path', { d: 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1' }],
+  ],
 };
+
+// hasIcon says whether icon(name) can draw the name. The tests use it to
+// check the names in dashboard.json.
+export function hasIcon(name) {
+  return Object.hasOwn(ICONS, name);
+}
 
 // icon('info') returns a new <svg> element, 16px square unless size says
 // otherwise. It is decorative (aria-hidden): the control around it carries

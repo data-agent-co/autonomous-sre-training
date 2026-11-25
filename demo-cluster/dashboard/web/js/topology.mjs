@@ -1,8 +1,9 @@
-// The topology card: the demo apps as boxes, the traffic that reaches them,
-// the ports they are read through and their fault badges. The DOM is built
-// once. Every refresh changes attributes and text in place, which keeps the
-// animations running. topology-model.mjs holds the rules for what is shown;
-// css/topology.css draws each state.
+// The topology card, in two layers. The demo apps: boxes, the traffic that
+// reaches them, the ports they are read through and their fault badges. The
+// control plane under them: what reads the apps and where its findings go.
+// The DOM is built once. Every refresh changes attributes and text in
+// place, which keeps the animations running. topology-model.mjs holds the
+// rules for what is shown; css/topology.css draws each state.
 
 import { clear, el, svgEl } from './dom.mjs';
 import { icon } from './icons.mjs';
@@ -16,6 +17,11 @@ const FIGURE_SIZE = 20;
 const PORT_ICON_SIZE = 13;
 const KEY_ICON_SIZE = 12;
 const FLOW_DOT_RADIUS = 4;
+const MARK_SIZE = 18;
+const ROW_ICON_SIZE = 16;
+const STEP_ICON_SIZE = 11;
+const ACCESS_ICON_SIZE = 11;
+const BUS_END_RADIUS = 3.5;
 
 // An attribute or a text is written only when it changes, so a tooltip that
 // is showing and a text the reader has selected survive a refresh.
@@ -25,6 +31,13 @@ function setAttr(node, name, value) {
 
 function setText(node, text) {
   if (node.textContent !== text) node.textContent = text;
+}
+
+// What a state says in words goes to the hover text and to the name a
+// screen reader reads.
+function setTitle(node, title) {
+  setAttr(node, 'title', title);
+  setAttr(node, 'aria-label', title);
 }
 
 function readNotesOpen() {
@@ -52,9 +65,10 @@ function figure(name) {
   return symbol;
 }
 
-// The source and the nodes are groups that the keyboard can reach. render()
-// names each with its whole state, because a hover text is out of reach of
-// a keyboard, a touch screen and a screen reader.
+// The source, the nodes and the boxes of the control plane are groups that
+// the keyboard can reach. render() names each with its whole state, because
+// a hover text is out of reach of a keyboard, a touch screen and a screen
+// reader.
 const BOX = { role: 'group', tabindex: 0 };
 
 function buildSource(source) {
@@ -104,6 +118,201 @@ function buildNode(node) {
   return { root, sub, badge, ports, edge: node.traffic ? buildEdge() : null };
 }
 
+// The control plane
+
+function stepMark(name) {
+  const symbol = icon(name, STEP_ICON_SIZE);
+  symbol.classList.add(`topo-cp-step-${name}`);
+  return symbol;
+}
+
+// A stage of a box's strip. Its mark is a dot, a check or a cross: the style
+// sheet draws the dot and shows the one that goes with the state.
+function buildStage(stage) {
+  const mark = el('span', { class: 'topo-cp-step-mark' }, stepMark('check'), stepMark('cross'));
+  return el('span', { class: 'topo-cp-step', role: 'img' }, mark, el('span', { text: stage.label }));
+}
+
+// A row is an image with one name, like a port: its dot, its label and its
+// sub-line say one thing together.
+function buildRow(row) {
+  const text = el('span', { class: 'topo-cp-item-text' });
+  const root = el(
+    'div',
+    { class: 'topo-cp-item', role: 'img' },
+    el('span', { class: 'topo-cp-dot' }),
+    row.icon && icon(row.icon, ROW_ICON_SIZE),
+    el('div', {}, el('b', { text: row.label }), text),
+  );
+  return { root, text };
+}
+
+// The list of a box. id goes to its heading, so it must be unique in the
+// page.
+function buildList(list, id) {
+  const name = [list.title, list.scope].filter(Boolean).join(', ');
+  const heading = el('div', { class: 'topo-cp-list-title', id, text: name });
+  const counts = el('p', { class: 'topo-cp-counts' });
+  // A list without bullets is not a list to every screen reader, unless it
+  // says so. The heading names it: a label of its own would say the same
+  // words a second time.
+  const rows = el('ul', { class: 'topo-cp-results', role: 'list', 'aria-labelledby': id });
+  const more = el('p', { class: 'topo-cp-more', hidden: true });
+  const none = el('p', { class: 'topo-cp-none', hidden: true }, icon('check', KEY_ICON_SIZE), list.empty);
+  const root = el('div', { class: 'topo-cp-list' }, heading, counts, rows, more, none);
+  return { root, counts, rows, more, none, shown: '' };
+}
+
+function buildResult({ kind, object, backend, title }) {
+  return el(
+    'li',
+    { class: 'topo-cp-result', title },
+    el('span', { class: 'topo-cp-dot' }),
+    el('b', { text: kind }),
+    el('span', { class: 'topo-cp-result-object', text: object }),
+    backend && el('span', { class: 'topo-cp-tag', text: backend }),
+  );
+}
+
+// The pill in a box's head says what the box may do in the cluster. Its
+// name is its label alone. The sentence behind it is its hover text, which
+// a screen reader reads as the description: in the name too, it would be
+// read twice.
+function buildAccess(access) {
+  return el(
+    'span',
+    {
+      class: 'topo-cp-access',
+      role: 'note',
+      title: access.title,
+      'aria-label': access.label,
+      dataset: access.write ? { write: 'true' } : {},
+    },
+    access.write && icon('key', ACCESS_ICON_SIZE),
+    access.label,
+  );
+}
+
+function buildBox(box) {
+  const stages = box.stages.map(buildStage);
+  const rows = box.rows.map(buildRow);
+  const list = box.list ? buildList(box.list, `topo-cp-list-${box.id}`) : null;
+  const mark = icon(box.icon, MARK_SIZE);
+  mark.classList.add('topo-cp-mark');
+  const strip = stages.flatMap((stage, index) =>
+    index === 0 ? [stage] : [el('span', { class: 'topo-cp-step-sep', 'aria-hidden': 'true', text: '›' }), stage],
+  );
+  const root = el(
+    'div',
+    { class: 'topo-cp-box', ...BOX, dataset: { box: box.id } },
+    el('div', { class: 'topo-cp-head' }, mark, el('b', { text: box.label }), box.access && buildAccess(box.access)),
+    el('div', { class: 'topo-cp-sub', title: box.sub, text: box.sub }),
+    el('div', { class: 'topo-cp-steps' }, strip),
+    el('div', { class: 'topo-cp-rows' }, rows.map((row) => row.root)),
+    list?.root,
+  );
+  if (box.wide) root.dataset.wide = 'true';
+  return { id: box.id, reads: box.reads, root, stages, rows, list };
+}
+
+// A link between two boxes: its line, its arrowhead and its label. The label
+// is the one part of the wires that catches the pointer, to show its title.
+// The wires are hidden from a screen reader, so the same words are kept in
+// text as well: a paragraph of the page, which buildControlPlane() hides
+// from the eye instead.
+function buildLink(link) {
+  const line = svgEl('path', { class: 'topo-cp-link-line' });
+  const head = svgEl('path', { class: 'topo-cp-link-head' });
+  const title = svgEl('title');
+  const label = svgEl('text', { class: 'topo-cp-link-label' }, title, link.label);
+  const root = svgEl('g', { class: 'topo-cp-link' }, line, head, label);
+  return { id: link.id, from: link.from, to: link.to, root, line, head, label, title, text: el('p') };
+}
+
+// The footnote says what the port marks stand for, in the words of the
+// spec, and then what the spec adds.
+function buildNote(spec) {
+  const keys = Object.keys(spec.ports).map((kind) =>
+    el('span', { class: 'topo-port', dataset: { kind } }, icon(kind, KEY_ICON_SIZE)),
+  );
+  const legends = Object.values(spec.ports).flatMap((port, index) => {
+    // A mark and the first word of its legend stay on one line.
+    const [first, ...rest] = port.legend.split(' ');
+    return [index > 0 && ', ', el('span', { class: 'topo-cp-key' }, keys[index], ' ', first), ' ', rest.join(' ')];
+  });
+  const note = el(
+    'p',
+    { class: 'topo-cp-note' },
+    "What reads the apps sits on each node's edge: ",
+    legends,
+    '. Each kind of mark joins one line into its reader. ',
+    spec.controlPlane.note,
+  );
+  return { note, keys };
+}
+
+function buildControlPlane(spec) {
+  const plane = spec.controlPlane;
+  const boxes = plane.boxes.map(buildBox);
+  // A box stands apart from the one before it when a link runs between the
+  // two: the gap holds the link and its label.
+  boxes.slice(1).forEach((box, index) => {
+    const before = boxes[index].id;
+    const joined = plane.links.some(
+      (link) => (link.from === before && link.to === box.id) || (link.from === box.id && link.to === before),
+    );
+    if (joined) box.root.dataset.joined = 'true';
+  });
+  const row = el('div', { class: 'topo-cp-row' }, boxes.map((box) => box.root));
+  const links = plane.links.map(buildLink);
+  const { note, keys } = buildNote(spec);
+  const root = el(
+    'div',
+    { class: 'topo-cp' },
+    el('h3', { class: 'topo-layer-title', text: plane.title }),
+    row,
+    // What the links say, for a screen reader: after the boxes they join.
+    el('div', { class: 'visually-hidden' }, links.map((link) => link.text)),
+    note,
+  );
+  return { root, row, boxes, links, keys };
+}
+
+// A bus joins the ports of one kind to the box that reads the kind. Its
+// drops and its collector are inside the app panel and are cut where the
+// panel's content scrolls out of view; its trunk leaves the panel. The
+// collector is two runs, one from each end to the trunk: each run is a path
+// of its own, so that each can start its dashes where the drops before it
+// leave off.
+function buildBus(kind, nodes) {
+  const drops = nodes.map(() => svgEl('path', { class: 'topo-bus-line' }));
+  const collector = [0, 1].map(() => svgEl('path', { class: 'topo-bus-line' }));
+  const trunk = svgEl('path', { class: 'topo-bus-line topo-bus-trunk' });
+  const head = svgEl('path', { class: 'topo-bus-head' });
+  const end = svgEl('circle', { class: 'topo-bus-end', r: BUS_END_RADIUS, hidden: true });
+  return {
+    kind,
+    nodes,
+    drops,
+    collector,
+    trunk,
+    head,
+    end,
+    inside: svgEl('g', { class: 'topo-bus', 'data-kind': kind }, drops, collector),
+    outside: svgEl('g', { class: 'topo-bus', 'data-kind': kind }, trunk, head, end),
+  };
+}
+
+// One bus per kind of port that a box reads and a node has. nodes lists, by
+// index, the nodes with a port of the kind: each has one drop.
+function buildBuses(spec) {
+  const kinds = [...new Set(spec.controlPlane.boxes.map((box) => box.reads).filter(Boolean))];
+  return kinds.flatMap((kind) => {
+    const nodes = spec.nodes.flatMap((node, index) => ((node.ports ?? []).includes(kind) ? [index] : []));
+    return nodes.length > 0 ? [buildBus(kind, nodes)] : [];
+  });
+}
+
 function buildView(spec) {
   const source = buildSource(spec.source);
   const nodes = spec.nodes.map(buildNode);
@@ -119,11 +328,8 @@ function buildView(spec) {
   // a role and a name.
   const panel = el('div', { class: 'topo-panel', role: 'group', 'aria-label': spec.title, tabindex: 0 }, row);
 
-  const keys = Object.entries(spec.ports).map(([kind, port]) => {
-    const key = el('span', { class: 'topo-port', dataset: { kind } }, icon(kind, KEY_ICON_SIZE));
-    return { key, chip: el('li', { class: 'topo-chip' }, key, port.legend) };
-  });
-  const legend = el('ul', { class: 'topo-legend' }, keys.map(({ chip }) => chip));
+  const plane = spec.controlPlane ? buildControlPlane(spec) : null;
+  const buses = plane ? buildBuses(spec) : [];
 
   const edges = fed.map((node) => node.edge);
   const stem = svgEl('path', { class: 'topo-stem' });
@@ -131,15 +337,21 @@ function buildView(spec) {
   // A nested <svg> cuts what it holds at its own box. It is kept on the
   // panel's inner box, so a wire stops where the panel's content scrolls
   // out of view.
-  const clip = svgEl('svg', {}, stem, edges.map((edge) => edge.root), link);
+  const clip = svgEl('svg', {}, stem, edges.map((edge) => edge.root), link, buses.map((bus) => bus.inside));
 
   const stack = el(
     'div',
     { class: 'topo-stack' },
     el('h3', { class: 'topo-layer-title' }, spec.title, ' ', el('span', { text: spec.namespace })),
     panel,
-    legend,
-    svgEl('svg', { class: 'topo-wires', 'aria-hidden': 'true' }, clip),
+    plane?.root,
+    svgEl(
+      'svg',
+      { class: 'topo-wires', 'aria-hidden': 'true' },
+      clip,
+      buses.map((bus) => bus.outside),
+      plane?.links.map((each) => each.root),
+    ),
   );
 
   const problemText = el('span');
@@ -155,7 +367,8 @@ function buildView(spec) {
     children: [el('h2', { class: 'card-title', text: 'Topology' }), stack, problem, notes],
     source,
     nodes,
-    keys: keys.map(({ key }) => key),
+    plane,
+    buses,
     stack,
     panel,
     wires: { clip, stem, edges, link },
@@ -163,6 +376,48 @@ function buildView(spec) {
     problemText,
     notes,
   };
+}
+
+// renderList shows a box's list. Its rows are the one part of the card that
+// comes and goes, so they are built again, but only when they change.
+function renderList(view, list) {
+  setText(view.counts, list.summary);
+  const shown = JSON.stringify(list.rows);
+  if (shown !== view.shown) {
+    view.shown = shown;
+    view.rows.replaceChildren(...list.rows.map(buildResult));
+  }
+  view.rows.hidden = list.rows.length === 0;
+  setText(view.more, list.more > 0 ? `+${list.more} more` : '');
+  view.more.hidden = list.more === 0;
+  // The empty text is for a list that is known to be empty, not for one
+  // whose query failed.
+  view.none.hidden = list.count !== 0;
+}
+
+function renderControlPlane(view, model) {
+  model.boxes.forEach((box, index) => {
+    const { root, stages, rows, list } = view.boxes[index];
+    setAttr(root, 'data-off', String(box.off));
+    setAttr(root, 'aria-label', box.title);
+    box.stages.forEach((stage, at) => {
+      setAttr(stages[at], 'data-state', stage.state);
+      setTitle(stages[at], stage.title);
+    });
+    box.rows.forEach((row, at) => {
+      setAttr(rows[at].root, 'data-state', row.state);
+      setTitle(rows[at].root, row.title);
+      setText(rows[at].text, row.text);
+    });
+    if (box.list) renderList(list, box.list);
+  });
+  model.links.forEach((link, index) => {
+    const { root, title, text } = view.links[index];
+    setAttr(root, 'data-state', link.state);
+    // The same words for a pointer and for a screen reader.
+    setText(title, link.title);
+    setText(text, link.title);
+  });
 }
 
 // render shows a model from deriveTopology(). The states are data
@@ -183,13 +438,11 @@ function render(view, model) {
     setText(sub, node.sub);
     if (node.fault) {
       setAttr(badge, 'data-state', node.fault.state);
-      setAttr(badge, 'title', node.fault.title);
-      setAttr(badge, 'aria-label', node.fault.title);
+      setTitle(badge, node.fault.title);
     }
     node.ports.forEach((port, at) => {
       setAttr(ports[at], 'data-state', port.state);
-      setAttr(ports[at], 'title', port.title);
-      setAttr(ports[at], 'aria-label', port.title);
+      setTitle(ports[at], port.title);
     });
     if (node.edge) {
       setAttr(edge.root, 'data-state', node.edge.state);
@@ -198,7 +451,34 @@ function render(view, model) {
     }
   });
 
-  model.ports.forEach((port, index) => setAttr(view.keys[index], 'data-state', port.up ? 'up' : 'down'));
+  if (!view.plane) return;
+  renderControlPlane(view.plane, model.controlPlane);
+  // A mark in the footnote and the lines of a bus are lit while any port of
+  // their kind is up. A drop follows its own port: no line flows out of a
+  // port that is not read.
+  const lit = (kind) => (model.ports.find((port) => port.kind === kind)?.up ? 'up' : 'down');
+  for (const key of view.plane.keys) setAttr(key, 'data-state', lit(key.dataset.kind));
+  for (const bus of view.buses) {
+    for (const part of [...bus.collector, bus.trunk, bus.head, bus.end]) setAttr(part, 'data-state', lit(bus.kind));
+    bus.nodes.forEach((node, at) => {
+      const port = model.nodes[node].ports.find(({ kind }) => kind === bus.kind);
+      setAttr(bus.drops[at], 'data-state', port.state);
+    });
+  }
+  keepInStep(view.buses);
+}
+
+// keepInStep starts the moving dashes of every bus line at the same moment.
+// A line that lights up later would otherwise move half a dash behind the
+// line it joins, and the dashes would no longer meet at the corner.
+function keepInStep(buses) {
+  for (const bus of buses) {
+    for (const line of [...bus.drops, ...bus.collector, bus.trunk]) {
+      for (const animation of line.getAnimations()) {
+        if (animation.startTime !== 0) animation.startTime = 0;
+      }
+    }
+  }
 }
 
 // measure reads where things are, in whole px from the stack's corner, and
@@ -217,7 +497,7 @@ function measure(view) {
     };
   };
 
-  const { panel } = view;
+  const { panel, plane } = view;
   const outer = box(panel);
   // The panel without its border and without a scrollbar.
   const inner = {
@@ -228,7 +508,18 @@ function measure(view) {
   };
   const wiring = routeWires({
     source: box(view.source.root),
-    nodes: view.nodes.map((node) => ({ box: box(node.root), fed: node.edge !== null })),
+    nodes: view.nodes.map((node) => ({
+      box: box(node.root),
+      fed: node.edge !== null,
+      ports: Object.fromEntries(node.ports.map((port) => [port.dataset.kind, box(port)])),
+    })),
+    panel: { inner, outer },
+    controlPlane: plane && {
+      box: box(plane.root),
+      row: box(plane.row),
+      boxes: plane.boxes.map(({ id, reads, root }) => ({ id, reads, box: box(root) })),
+      links: plane.links.map(({ id, from, to }) => ({ id, from, to })),
+    },
   });
   return { inner, wiring };
 }
@@ -255,6 +546,40 @@ function drawWires(view, { inner, wiring }) {
     edge.dot.style.setProperty('offset-path', `path("${motion}")`);
   });
   link.setAttribute('d', wiring.link);
+
+  for (const bus of view.buses) {
+    // The page and the model count the buses by the same rule. Should they
+    // ever differ, a bus without a route is not drawn.
+    const route = wiring.buses.find(({ kind }) => kind === bus.kind);
+    const runs = route?.collector ? route.collector.split(/ (?=M)/) : [];
+    const pieces = [
+      ...bus.drops.map((drop, index) => [drop, route?.drops[index], route?.phases.drops[index]]),
+      ...bus.collector.map((run, index) => [run, runs[index], route?.phases.collector[index]]),
+      [bus.trunk, route?.trunk, 0],
+    ];
+    for (const [path, d, phase] of pieces) {
+      path.setAttribute('d', d ?? '');
+      // The dashes of each piece start where the piece before it leaves
+      // off: css/topology.css reads the offset from --topo-dash.
+      path.style.setProperty('--topo-dash', String(phase ?? 0));
+    }
+    bus.head.setAttribute('d', route?.head ?? '');
+    bus.end.toggleAttribute('hidden', !route?.dot);
+    if (route?.dot) {
+      bus.end.setAttribute('cx', route.dot.x);
+      bus.end.setAttribute('cy', route.dot.y);
+    }
+  }
+  (view.plane?.links ?? []).forEach((each, index) => {
+    const { line, head, label } = wiring.links[index];
+    each.line.setAttribute('d', line);
+    each.head.setAttribute('d', head);
+    each.label.toggleAttribute('hidden', label === null);
+    if (label === null) return;
+    each.label.setAttribute('x', label.x);
+    each.label.setAttribute('y', label.y);
+    each.label.dataset.align = label.align;
+  });
 }
 
 // mountTopology(root, spec, { instant }) fills the card and returns

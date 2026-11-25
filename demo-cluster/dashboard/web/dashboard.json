@@ -100,8 +100,256 @@
       },
       "scan": {
         "legend": "K8sGPT scans the pods about every 30s",
-        "up": "(count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"} > 0) or count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"}) * 0) == bool 2"
+        "up": "(count(max by (deployment) (kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"}) > 0) or count(max by (deployment) (kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"})) * 0) == bool 2"
       }
+    },
+    "controlPlane": {
+      "title": "Control plane",
+      "note": "Prometheus fires DemoContainerOOMKilled seconds after an OOMKill. K8sGPT writes a Result for the pod a few restarts later, once it is in CrashLoopBackOff. Both reach your channel only through slack-relay, and only with SLACK_WEBHOOK_URL set.",
+      "boxes": [
+        {
+          "id": "prometheus",
+          "label": "Prometheus",
+          "sub": "monitoring · scrapes the apps every 5s",
+          "icon": "prometheus",
+          "reads": "metrics",
+          "access": {
+            "label": "read-only",
+            "title": "Prometheus only reads: it scrapes /metrics and the cluster's state."
+          },
+          "stages": [
+            {
+              "id": "scrape",
+              "label": "Scrape",
+              "title": "the apps and kube-state-metrics, every 5s",
+              "up": "max(up{namespace=\"demo-apps\"}) * max(up{job=\"kube-state-metrics\"})"
+            },
+            {
+              "id": "rule",
+              "label": "Rule",
+              "title": "DemoContainerOOMKilled, the one alert rule of the demo",
+              "idleText": "no data",
+              "failedText": "not loaded",
+              "failed": "count(prometheus_rule_group_rules) unless count(prometheus_rule_group_rules{rule_group=~\".+;demo-apps\"})",
+              "ok": "count(prometheus_rule_group_rules{rule_group=~\".+;demo-apps\"})"
+            },
+            {
+              "id": "alert",
+              "label": "Alert",
+              "title": "seconds after an OOMKill, minutes before K8sGPT",
+              "activeText": "firing",
+              "active": "count(ALERTS{alertname=\"DemoContainerOOMKilled\", alertstate=\"firing\"})"
+            }
+          ],
+          "rows": [
+            {
+              "id": "targets",
+              "label": "App targets",
+              "text": "payments-api, recommend-svc",
+              "icon": "metrics",
+              "idleText": "no data",
+              "activeText": "not all scraped",
+              "active": "count(up{namespace=\"demo-apps\"} == 0)",
+              "ok": "min(up{namespace=\"demo-apps\"}) and on() (count(count by (job) (up{namespace=\"demo-apps\"})) >= 2)"
+            },
+            {
+              "id": "ksm",
+              "label": "kube-state-metrics",
+              "text": "pod and container state",
+              "icon": "layers",
+              "failedText": "not scraped",
+              "up": "max(up{job=\"kube-state-metrics\"})"
+            },
+            {
+              "id": "rule",
+              "label": "OOMKill alert rule",
+              "text": "DemoContainerOOMKilled",
+              "icon": "alert",
+              "idleText": "no data",
+              "failedText": "not loaded",
+              "activeText": "firing",
+              "failed": "count(prometheus_rule_group_rules) unless count(prometheus_rule_group_rules{rule_group=~\".+;demo-apps\"})",
+              "active": "count(ALERTS{alertname=\"DemoContainerOOMKilled\", alertstate=\"firing\"})",
+              "ok": "count(prometheus_rule_group_rules{rule_group=~\".+;demo-apps\"})"
+            },
+            {
+              "id": "alertmanager",
+              "label": "Alertmanager",
+              "text": "routes the alert",
+              "icon": "bell",
+              "failedText": "not scraped",
+              "up": "max(up{job=\"prometheus-stack-kube-prom-alertmanager\", endpoint!=\"reloader-web\"})"
+            }
+          ]
+        },
+        {
+          "id": "k8sgpt",
+          "label": "K8sGPT",
+          "sub": "k8sgpt-system · scans demo-apps",
+          "icon": "scan",
+          "reads": "scan",
+          "wide": true,
+          "access": {
+            "label": "read-only",
+            "title": "K8sGPT only reads demo-apps. It writes Result objects in its own namespace."
+          },
+          "stages": [
+            {
+              "id": "scan",
+              "label": "Scan",
+              "title": "the Pod analyzer on demo-apps, about every 30s",
+              "up": "(count(max by (deployment) (kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"}) > 0) or count(max by (deployment) (kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=~\"k8sgpt-sample|k8sgpt-operator-controller-manager\"})) * 0) == bool 2"
+            },
+            {
+              "id": "result",
+              "label": "Result",
+              "title": "one Result object per problem",
+              "activeText": "found",
+              "active": "count(max by (name, result_namespace, kind, object, backend) (k8sgpt_result_info))",
+              "needs": "max(up{job=\"kube-state-metrics\"})"
+            },
+            {
+              "id": "explanation",
+              "label": "Explanation",
+              "title": "the LLM explains each Result",
+              "idleText": "off",
+              "failedText": "Analyze calls failed",
+              "failed": "((sum(increase(k8sgpt_number_of_failed_backend_ai_calls[5m])) > 0) or (sum(k8sgpt_number_of_failed_backend_ai_calls) > 6)) and on() count(k8sgpt_config_ai_info{enabled=\"true\"})",
+              "ok": "count(k8sgpt_result_info and on (backend) k8sgpt_config_ai_info{enabled=\"true\"})",
+              "set": "count(k8sgpt_config_ai_info{enabled=\"true\"})",
+              "needs": "count(k8sgpt_config_ai_info)"
+            }
+          ],
+          "rows": [
+            {
+              "id": "operator",
+              "label": "Operator",
+              "text": "reconciles about every 30s",
+              "icon": "loop",
+              "failedText": "not ready",
+              "up": "max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"k8sgpt-operator-controller-manager\"} > bool 0)"
+            },
+            {
+              "id": "scanner",
+              "label": "Scanner",
+              "text": "Pod analyzer on demo-apps",
+              "icon": "scan",
+              "failedText": "not ready",
+              "up": "max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"k8sgpt-sample\"} > bool 0)"
+            },
+            {
+              "id": "llm",
+              "label": "LLM",
+              "text": "explains each Result",
+              "icon": "spark",
+              "idleText": "off",
+              "failedText": "Analyze calls failed",
+              "failed": "((sum(increase(k8sgpt_number_of_failed_backend_ai_calls[5m])) > 0) or (sum(k8sgpt_number_of_failed_backend_ai_calls) > 6)) and on() count(k8sgpt_config_ai_info{enabled=\"true\"})",
+              "ok": "count(k8sgpt_result_info and on (backend) k8sgpt_config_ai_info{enabled=\"true\"})",
+              "set": "count(k8sgpt_config_ai_info{enabled=\"true\"})",
+              "needs": "count(k8sgpt_config_ai_info)",
+              "info": {
+                "expr": "k8sgpt_config_ai_info{enabled=\"true\"}",
+                "text": "{model} · {backend}"
+              }
+            },
+            {
+              "id": "watcher",
+              "label": "Watcher",
+              "text": "labelled ConfigMaps become Results",
+              "icon": "eye",
+              "failedText": "not scraped",
+              "up": "max(up{job=\"configmap-watcher\"})"
+            }
+          ],
+          "list": {
+            "title": "Results",
+            "scope": "k8sgpt-system",
+            "expr": "max by (name, result_namespace, kind, object, backend) ((k8sgpt_result_info unless on (backend) k8sgpt_config_ai_info{enabled!=\"true\"}) or max without (backend) (k8sgpt_result_info and on (backend) k8sgpt_config_ai_info{enabled!=\"true\"}))",
+            "tagText": "the backend as set in the K8sGPT resource (openai also stands for a local model, Claude and Groq, which speak its API), or the watcher's own. A Result written while the LLM row is red has the tag and no AI text.",
+            "needs": "max(up{job=\"kube-state-metrics\"})",
+            "limit": 4,
+            "empty": "No Results. A fault you trigger shows here."
+          }
+        },
+        {
+          "id": "slack",
+          "label": "Slack",
+          "sub": "the one path to your channel",
+          "icon": "slack",
+          "access": {
+            "label": "posts out",
+            "write": true,
+            "title": "slack-relay posts findings to your Slack webhook. No finding leaves the cluster any other way, except in LLM calls when a cloud LLM is set. slack-probe sends the webhook an empty check every 30s."
+          },
+          "stages": [
+            {
+              "id": "relay",
+              "label": "Relay",
+              "title": "slack-relay drops K8sGPT's repeats of a finding",
+              "idleText": "off",
+              "failedText": "not ready",
+              "up": "max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"} > bool 0)",
+              "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"})"
+            },
+            {
+              "id": "webhook",
+              "label": "Webhook",
+              "title": "your Slack incoming webhook",
+              "idleText": "off",
+              "failedText": "unreachable",
+              "up": "max(slack_webhook_up)",
+              "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"}) unless count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-probe\"})"
+            }
+          ],
+          "rows": [
+            {
+              "id": "relay",
+              "label": "slack-relay",
+              "text": "posts Results and alerts",
+              "icon": "send",
+              "idleText": "not deployed",
+              "failedText": "not ready",
+              "up": "max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"} > bool 0)",
+              "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"})"
+            },
+            {
+              "id": "webhook",
+              "label": "Webhook",
+              "text": "probed every 30s",
+              "icon": "link",
+              "idleText": "off",
+              "failedText": "unreachable",
+              "up": "max(slack_webhook_up)",
+              "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"}) unless count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-probe\"})"
+            }
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "results",
+          "from": "k8sgpt",
+          "to": "slack",
+          "label": "Results",
+          "title": "slack-relay posts a K8sGPT problem once, and each ConfigMap change",
+          "activeText": "exist",
+          "active": "count(max by (name, result_namespace, kind, object, backend) (k8sgpt_result_info)) and on() (max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"}) > 0)",
+          "ok": "max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"} > bool 0)",
+          "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"})"
+        },
+        {
+          "id": "alerts",
+          "from": "prometheus",
+          "to": "slack",
+          "label": "alerts",
+          "title": "through Alertmanager, one post per firing alert, again after 24h",
+          "activeText": "firing",
+          "active": "count(ALERTS{alertname=\"DemoContainerOOMKilled\", alertstate=\"firing\"}) and on() (max(up{job=\"prometheus-stack-kube-prom-alertmanager\", endpoint!=\"reloader-web\"}) > 0) and on() (max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"}) > 0)",
+          "ok": "(max(up{job=\"prometheus-stack-kube-prom-alertmanager\", endpoint!=\"reloader-web\"}) > 0) and on() (max(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\", deployment=\"slack-relay\"}) > 0)",
+          "needs": "count(kube_deployment_status_replicas_ready{namespace=\"k8sgpt-system\"}) and on() count(up{job=\"prometheus-stack-kube-prom-alertmanager\", endpoint!=\"reloader-web\"})"
+        }
+      ]
     },
     "notes": "### Sample apps in the `demo-apps` namespace\n\n| App | Stack | Limit | /metrics | Role | Fault trigger |\n|---|---|---|---|---|---|\n| `payments-api` | Go | 128Mi | yes | **OOMKill victim** (F1) | `./scripts/trigger-oomkill.sh` allocates past the limit in the running container after every restart, until CrashLoopBackOff |\n| `recommend-svc` | Python | 128Mi + 128Mi `leak-fixture` sidecar | yes | **Slow-leak victim** (F2) | `./scripts/trigger-slowleak.sh` makes the sidecar's memory climb 20 MB/min until it is OOMKilled (invisible to K8sGPT until then) |\n| `catalog-svc` | nginx | 64Mi | no | **Healthy control** | none: no traffic, always green |\n| `loadgen` | curl | 32Mi | no | **Traffic generator** | runs continuously, about 2 req/sec each to payments-api and recommend-svc `/healthz` |\n\n### Detection layers\n\n- **Golden signals (L, T, E, S)**: the Throughput, Latency, Errors and Saturation panels show signs of a fault *regardless of root cause*. The Composite Health Score combines them into one 0-100 number.\n- **K8sGPT** (`k8sgpt-system`) scans the `demo-apps` Pods and writes a Result per finding (`kubectl get results -n k8sgpt-system`). With an LLM configured it adds an AI explanation; with a Slack webhook it posts each new Result.\n- **watcher** (`k8sgpt-system`) writes a Result when a ConfigMap labelled `k8sgpt-detection-pack.io/critical=true` is created, changed or deleted.\n\n### Observability in the `monitoring` namespace\n\n- **kube-prometheus-stack**: Prometheus (6h retention), Alertmanager, kube-state-metrics and node-exporter. App `/metrics` is scraped through a **ServiceMonitor** per app.\n- **demo-dashboard**: this page. The panels and the topology are defined in `demo-cluster/dashboard/web/dashboard.json`.\n- **Perses** shows the same panels from `demo-cluster/perses/demo-cluster-overview.json`."
   },

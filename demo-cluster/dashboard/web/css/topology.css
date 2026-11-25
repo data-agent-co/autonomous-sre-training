@@ -1,7 +1,9 @@
-/* The topology card: the demo apps as boxes, the traffic that reaches them,
-   the ports they are read through and their fault badges. js/topology.mjs
-   builds the elements and sets their states as data attributes; this file
-   gives every state its look. The custom properties come from base.css. */
+/* The topology card, in two layers. The demo apps: boxes, the traffic that
+   reaches them, the ports they are read through and their fault badges. The
+   control plane under them: what reads the apps and where its findings go.
+   js/topology.mjs builds the elements and sets their states as data
+   attributes; this file gives every state its look. The custom properties
+   come from base.css. */
 
 .topology {
   /* A status colour for small text: a step towards the text colour, so that
@@ -9,13 +11,22 @@
   --topo-good-text: color-mix(in srgb, var(--green) 70%, var(--text));
   --topo-warning-text: color-mix(in srgb, var(--amber) 85%, var(--text));
   --topo-critical-text: color-mix(in srgb, var(--red) 80%, var(--text));
+  --topo-primary-text: color-mix(in srgb, var(--primary) 75%, var(--text));
 
   /* The same tone under white text: the plain red is too light for it. */
   --topo-critical-fill: color-mix(in srgb, var(--red) 84%, #000);
+
+  /* The tint of the control plane. A label on a wire wears it as a halo, so
+     the wires need it too. */
+  --topo-plane: color-mix(in srgb, var(--primary) 6%, var(--surface));
 }
 
-/* The stack is the layer and the legend under it. The wires are drawn over
-   both, in the stack's own coordinates. */
+:root[data-theme="light"] .topology {
+  --topo-plane: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+/* The stack is the two layers. The wires are drawn over both, in the
+   stack's own coordinates. */
 .topo-stack {
   position: relative;
 }
@@ -46,9 +57,12 @@
 
 /* The panel scrolls sideways where the row does not fit. A scroll container
    cuts what leaves it, so its paddings are larger than what hangs over the
-   nodes' edges: the ports, the fault badges and the fault ring. */
+   nodes' edges: the ports, the fault badges and the fault ring. Under the
+   ports, which hang 10px over the lowest node, the bottom padding leaves
+   24px for the collector lines of the buses. routeWires() spreads them
+   evenly over whatever room it finds there. */
 .topo-panel {
-  padding: 16px 12px 22px;
+  padding: 16px 12px 34px;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--border2);
@@ -368,36 +382,624 @@
   opacity: .55;
 }
 
-/* The legend: one chip per kind of port, centred under the panel. */
-.topo-legend {
+/* The buses. One per kind of port that a box of the control plane reads: a
+   drop from each port, a collector line under the nodes and a trunk into
+   the box. A drop is grey and still until its port is read, the collector
+   and the trunk until any port of the kind is. Then the line takes the
+   colour of that kind's mark, and its long dashes move towards the
+   reader. */
+
+.topo-bus[data-kind="metrics"] {
+  --topo-bus: var(--green);
+}
+
+.topo-bus[data-kind="scan"] {
+  --topo-bus: var(--primary);
+}
+
+/* A bus that is not read is as grey as the link above, and its drops run
+   beside that link and cross it. Short dashes, on a line thinner and
+   fainter than the link, keep the two from reading as one net. */
+.topo-bus-line {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  /* Where the dashes of this piece start, so that they run on from the
+     piece before it. topology.mjs sets it from the route. */
+  stroke-dashoffset: var(--topo-dash, 0);
+  opacity: .5;
+}
+
+.topo-bus-line[data-state="up"] {
+  stroke: var(--topo-bus, var(--text-muted));
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+  opacity: .9;
+  animation: topo-bus 1.1s linear infinite;
+  /* The animation moves the dashes on from the piece's own offset. */
+  animation-composition: add;
+}
+
+/* The trunk carries what all the drops of its kind bring. */
+.topo-bus-trunk[data-state="up"] {
+  stroke-width: 2;
+}
+
+/* The arrowhead into the box, and the dot that ends a trunk which cannot
+   reach its box. Each is as faint as its line. */
+.topo-wires .topo-bus-head,
+.topo-bus-end {
+  fill: var(--text-muted);
+  opacity: .5;
+}
+
+.topo-wires .topo-bus-head[data-state="up"],
+.topo-bus-end[data-state="up"] {
+  fill: var(--topo-bus, var(--text-muted));
+  opacity: .9;
+}
+
+/* The control plane: a tinted panel under the app panel. The trunks of the
+   buses run through the gap above it, one lane each: routeWires() spreads
+   the lanes evenly over the gap. */
+
+.topo-cp {
+  container: topo-cp / inline-size;
+  margin-top: 30px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border2));
+  border-radius: 12px;
+  background: var(--topo-plane);
+}
+
+.topo-cp > .topo-layer-title {
+  margin-bottom: 12px;
+}
+
+/* The boxes stand in a row. The room under them is the lane of a link that
+   runs around a box: routeWires() puts the link half way down it. */
+.topo-cp-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding-bottom: 28px;
+}
+
+.topo-cp-box {
+  flex: 1 1 228px;
+  min-width: 190px;
+  max-width: 270px;
+  padding: 10px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+/* The layer's title stands over the left of the first box, and a trunk
+   comes into the middle of that box's top edge. At this width the trunk
+   passes the title with room to spare. */
+.topo-cp-box:first-child {
+  min-width: 260px;
+}
+
+/* The box that takes the room the others leave. */
+.topo-cp-box[data-wide] {
+  flex: 4 1 360px;
+  min-width: 260px;
+  max-width: none;
+}
+
+/* A box that a link joins to the box before it: the wider gap holds the
+   link and its label. */
+.topo-cp-box[data-joined] {
+  margin-left: 48px;
+}
+
+/* A box with nothing in it that works or fails: grey and dashed, like a
+   node without data. */
+.topo-cp-box[data-off="true"] {
+  border-style: dashed;
+  background: none;
+}
+
+/* A box's head: its mark, its name and what it may do in the cluster. */
+
+.topo-cp-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+}
+
+.topo-cp-head b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-cp-mark {
+  color: var(--primary);
+}
+
+.topo-cp-box[data-off="true"] :is(.topo-cp-mark, .topo-cp-head b) {
+  color: var(--text-muted);
+}
+
+.topo-cp-access {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Amber, with a key: the box that posts to your Slack channel. */
+.topo-cp-access[data-write] {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  color: var(--topo-warning-text);
+}
+
+/* One line under the head, as high in every box, so the strips line up. */
+.topo-cp-sub {
+  height: 16px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The stage strip: what the box does, in order. A stage is grey with a
+   hollow dot while idle, grey with a half-full dot while it is set and not
+   yet proven to work, green with a check while it works, amber with a dot
+   that pulses while something passes through it and red with a cross when
+   it failed. The mark says the state; the colour repeats it. */
+
+.topo-cp-steps {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
+  gap: 3px 2px;
+  margin: 2px 0 6px;
+}
+
+.topo-cp-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.topo-cp-step-sep {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  opacity: .6;
+}
+
+.topo-cp-step-mark {
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  color: var(--topo-status, var(--text-muted));
+}
+
+/* The dot of an idle stage, and of an active one. */
+.topo-cp-step-mark::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+/* At this size the icons' own stroke is too thin to read. */
+.topo-cp-step-mark .icon {
+  display: none;
+  stroke-width: 3.5;
+}
+
+.topo-cp-step:is([data-state="ok"], [data-state="failed"]) .topo-cp-step-mark::before {
+  display: none;
+}
+
+.topo-cp-step[data-state="ok"] .topo-cp-step-check,
+.topo-cp-step[data-state="failed"] .topo-cp-step-cross {
+  display: block;
+}
+
+.topo-cp-step[data-state="ok"] {
+  --topo-status: var(--green);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  color: var(--text-dim);
+}
+
+.topo-cp-step[data-state="active"] {
+  --topo-status: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.topo-cp-step[data-state="active"] .topo-cp-step-mark::before {
+  background: currentColor;
+  animation: topo-step 1.4s ease-in-out infinite;
+}
+
+.topo-cp-step[data-state="failed"] {
+  --topo-status: var(--red);
+  border-color: color-mix(in srgb, var(--red) 55%, transparent);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Set: neutral, neither working nor idle. The lower half of the dot is
+   full, a shape of its own, so the state reads without its colour too. */
+.topo-cp-step[data-state="set"] {
+  --topo-status: var(--text-dim);
+  border-color: var(--border2);
+  color: var(--text-dim);
+}
+
+.topo-cp-step[data-state="set"] .topo-cp-step-mark::before,
+.topo-cp-item[data-state="set"] .topo-cp-dot {
+  background: linear-gradient(to top, currentColor 50%, transparent 50%);
+}
+
+/* The rows: the parts of a box, each with a dot for its state. In the wide
+   box they stand two by two, where each of the two columns can be 190px or
+   more: the largest of the two sizes keeps it from making three. */
+
+.topo-cp-rows {
+  display: grid;
+  gap: 5px;
+}
+
+.topo-cp-box[data-wide] .topo-cp-rows {
+  grid-template-columns: repeat(auto-fit, minmax(max(190px, 40%), 1fr));
+}
+
+.topo-cp-item {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 12px auto 0;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: help;
+}
+
+.topo-cp-item > .icon {
+  color: var(--text-muted);
+}
+
+.topo-cp-item > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.topo-cp-item b,
+.topo-cp-item-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-cp-item b {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.topo-cp-item-text {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+/* A hollow ring while idle: "nothing known" is not a grey kind of "works". */
+.topo-cp-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.topo-cp-item[data-state="ok"] {
+  --topo-status: var(--green);
+}
+
+.topo-cp-item[data-state="active"] {
+  --topo-status: var(--amber);
+  --topo-status-text: var(--topo-warning-text);
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+}
+
+.topo-cp-item[data-state="failed"] {
+  --topo-status: var(--red);
+  --topo-status-text: var(--topo-critical-text);
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+}
+
+.topo-cp-item[data-state="set"] .topo-cp-dot {
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+}
+
+.topo-cp-item:is([data-state="ok"], [data-state="active"], [data-state="failed"]) .topo-cp-dot {
+  border-color: var(--topo-status);
+  background: var(--topo-status);
+}
+
+.topo-cp-item:is([data-state="active"], [data-state="failed"]) .topo-cp-item-text {
+  color: var(--topo-status-text);
+  font-weight: 600;
+}
+
+/* The list under the rows of a box: what the box has found. It is a size
+   container: its rows are laid out by the width of the list, which is its
+   box's and not the window's. */
+
+.topo-cp-list {
+  container: topo-cp-list / inline-size;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.topo-cp-list-title {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topo-cp-counts,
+.topo-cp-more,
+.topo-cp-none {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* Until the first answers arrive the count and every row would read
+   "no data". */
+.topology:not(.topo-loaded) :is(.topo-cp-counts, .topo-cp-item-text) {
+  visibility: hidden;
+}
+
+/* The rows share the columns of the list, so the objects line up after the
+   longest kind: dot, kind, object, tag. The object is what says which pod
+   or ConfigMap a row is about, so it gets the room first: the kind and the
+   tag take what they need, up to a small cap, and the object takes the
+   rest. The tag's cap is a share of a wide list, where a long tag has room.
+   A browser without subgrid gives every row the same fixed columns
+   instead. */
+.topo-cp-results {
+  display: grid;
+  grid-template-columns: 8px fit-content(6em) minmax(0, 1fr) fit-content(max(5em, 22%));
+  gap: 4px 8px;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
 
-.topo-chip {
-  display: flex;
+.topo-cp-result {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 8px minmax(0, 6em) minmax(0, 1fr) fit-content(max(5em, 22%));
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 6px;
-  padding: 3px 12px 3px 4px;
-  border: 1px solid var(--border2);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  line-height: 1.45;
+  column-gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.topo-chip .topo-port {
+.topo-cp-result :is(b, .topo-cp-result-object, .topo-cp-tag) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-cp-result b {
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.topo-cp-result-object {
+  color: var(--text-dim);
+}
+
+/* A row without a tag gives the tag's room to its object. */
+.topo-cp-result-object:last-child {
+  grid-column: 3 / -1;
+}
+
+/* Every row of the list is a finding. */
+.topo-cp-result .topo-cp-dot {
+  border-color: var(--amber);
+  background: var(--amber);
+}
+
+/* The tag is as wide as its text, not as its column: a short tag next to a
+   long one is not stretched. It is as high as the row's line, so on one
+   line a row with a tag is no higher than a row without. */
+.topo-cp-tag {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 14px;
+}
+
+/* A narrow list cannot hold all three on one line: under 340px, a kind as
+   long as "ConfigMap" and a tag at its cap would leave the object less
+   than 170px, too little for a name such as demo-apps/payments-config.
+   The tag goes under its object there, and the object takes the tag's
+   room as well. */
+@container topo-cp-list (max-width: 339px) {
+  .topo-cp-results {
+    grid-template-columns: 8px fit-content(6em) minmax(0, 1fr);
+  }
+
+  .topo-cp-tag {
+    grid-column: 3;
+  }
+}
+
+.topo-cp-more {
+  margin-top: 4px;
+}
+
+.topo-cp-none {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.topo-cp-none .icon {
+  color: var(--green);
+}
+
+/* The footnote: what the marks on the nodes stand for, and how what the
+   layer finds travels. */
+
+.topo-cp-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.topo-cp-key {
+  white-space: nowrap;
+}
+
+.topo-cp-note .topo-port {
   width: 18px;
   height: 18px;
+  vertical-align: middle;
   cursor: default;
+}
+
+/* The links between the boxes. Off, where the path does not exist, a link
+   is faint and dashed. Ready, it is a grey line. Live, while there is
+   something for it to carry (a Result exists, the alert fires), it takes
+   the primary colour and its dashes move towards the box it runs into. */
+
+.topo-cp-link-line {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  opacity: .8;
+}
+
+.topo-wires .topo-cp-link-head {
+  fill: var(--text-muted);
+  opacity: .8;
+}
+
+.topo-cp-link[data-state="off"] .topo-cp-link-line {
+  stroke-dasharray: 2 4;
+}
+
+.topo-cp-link[data-state="off"] :is(.topo-cp-link-line, .topo-cp-link-head) {
+  opacity: .45;
+}
+
+.topo-cp-link[data-state="live"] .topo-cp-link-line {
+  stroke: var(--primary);
+  stroke-width: 2;
+  stroke-dasharray: 7 6;
+  opacity: 1;
+  animation: topo-link 1.1s linear infinite;
+}
+
+.topo-wires .topo-cp-link[data-state="live"] .topo-cp-link-head {
+  fill: var(--primary);
+  opacity: 1;
+}
+
+/* A label wears the tint of the layer as a halo, so that the line it sits
+   on does not run through its letters. It is the one part of the wires that
+   catches the pointer: its hover text says the state of the link. */
+.topo-cp-link-label {
+  fill: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--topo-plane);
+  stroke-width: 6px;
+  stroke-linejoin: round;
+  pointer-events: auto;
+  cursor: help;
+}
+
+.topo-cp-link-label[data-align="start"] {
+  text-anchor: start;
+}
+
+.topo-cp-link[data-state="live"] .topo-cp-link-label {
+  fill: var(--topo-primary-text);
+}
+
+/* Where the boxes do not fit side by side they stack, each as wide as the
+   layer. The gaps between them hold the links and their labels, and a link
+   around a box runs down the gutter on the left. The width is what the row
+   needs at its narrowest: 260 + 16 + 260 + 64 + 190. */
+@container topo-cp (max-width: 789px) {
+  .topo-cp-row {
+    flex-direction: column;
+    gap: 30px;
+    padding: 0 0 0 10px;
+  }
+
+  .topo-cp-row > .topo-cp-box {
+    flex: none;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .topo-cp-note {
+    margin-top: 12px;
+  }
 }
 
 /* What went wrong with the last refresh, when something did. */
@@ -490,6 +1092,30 @@
   }
 }
 
+/* Each moves a line's dashes on by one dash and one gap. */
+@keyframes topo-bus {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -11px;
+  }
+}
+
+@keyframes topo-link {
+  to {
+    stroke-dashoffset: -13;
+  }
+}
+
+@keyframes topo-step {
+  50% {
+    opacity: .35;
+    transform: scale(.8);
+  }
+}
+
 /* Forced colours (Windows High Contrast) replace backgrounds, borders and
    shadows, which is all that tells these states apart. */
 @media (forced-colors: active) {
@@ -513,15 +1139,91 @@
   .topo-dot {
     forced-color-adjust: none;
   }
+
+  /* The control plane. A stage keeps its mark, which says its state without
+     a colour: a hollow dot, a half-full dot, a full dot, a check or a cross.
+     The idle stage is dashed as well. */
+  .topo-cp-step-mark {
+    forced-color-adjust: none;
+    color: CanvasText;
+  }
+
+  .topo-cp-step[data-state="idle"] {
+    border-style: dashed;
+  }
+
+  /* A row's dot keeps its colour and takes a shape for each state: a ring
+     while idle, a half-full ring while set, a full dot while ok, a dot in a
+     ring while active and a square when failed. */
+  .topo-cp-dot {
+    forced-color-adjust: none;
+  }
+
+  .topo-cp-item[data-state="active"] .topo-cp-dot,
+  .topo-cp-result .topo-cp-dot {
+    outline: 1px solid CanvasText;
+    outline-offset: 2px;
+  }
+
+  .topo-cp-item[data-state="failed"] .topo-cp-dot {
+    border-radius: 0;
+  }
+
+  /* The wires of the control plane take the system's colours in every
+     state: the highlight colour while a bus is read and while a link is
+     live, the text colour otherwise. They keep their dashes, which tell the
+     states apart as well: a bus has long dashes while it is read and short
+     ones while it is not; a link that is off is dotted, one that is ready
+     is a full line and a live one has long dashes. Every selector here
+     names the state attribute, as the state rules above do: a plainer one
+     would lose to them, and the line would keep the page's own colour. */
+  .topo-wires .topo-bus-line[data-state],
+  .topo-wires .topo-cp-link[data-state] .topo-cp-link-line {
+    forced-color-adjust: none;
+    stroke: CanvasText;
+    opacity: 1;
+  }
+
+  .topo-wires .topo-bus-line[data-state="up"],
+  .topo-wires .topo-cp-link[data-state="live"] .topo-cp-link-line {
+    stroke: Highlight;
+  }
+
+  /* An arrowhead and an end dot have the colour of their line. */
+  .topo-wires .topo-bus-head[data-state],
+  .topo-wires .topo-bus-end[data-state],
+  .topo-wires .topo-cp-link[data-state] .topo-cp-link-head {
+    forced-color-adjust: none;
+    fill: CanvasText;
+    opacity: 1;
+  }
+
+  .topo-wires .topo-bus-head[data-state="up"],
+  .topo-wires .topo-bus-end[data-state="up"],
+  .topo-wires .topo-cp-link[data-state="live"] .topo-cp-link-head {
+    fill: Highlight;
+  }
+
+  /* A label is text: it has the text colour in every state. */
+  .topo-wires .topo-cp-link[data-state] .topo-cp-link-label {
+    forced-color-adjust: none;
+    fill: CanvasText;
+    stroke: Canvas;
+  }
 }
 
 /* Every state reads without its motion: the dot rests on its edge, the
-   blocked edge stays red. */
+   blocked edge stays red, a bus that is read and a live link keep their
+   colour and their long dashes, and an active stage its full dot. A live
+   link without its dashes would differ from a ready one by colour alone. */
 @media (prefers-reduced-motion: reduce) {
   .topo-src[data-state="running"] .topo-icon,
   .topo-badge[data-state="active"],
   .topo-edge[data-state="blocked"] .topo-edge-line,
-  .topo-edge[data-state="flow"] .topo-edge-dot {
+  .topo-edge[data-state="flow"] .topo-edge-dot,
+  .topo-bus-line[data-state="up"],
+  .topo-cp-step[data-state="active"] .topo-cp-step-mark::before,
+  .topo-cp-link[data-state="live"] .topo-cp-link-line {
     animation: none;
   }
 

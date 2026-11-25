@@ -113,12 +113,13 @@ type querySpec struct {
 }
 
 type topologySpec struct {
-	Title     string              `json:"title"`
-	Namespace string              `json:"namespace"`
-	Source    sourceSpec          `json:"source"`
-	Nodes     []nodeSpec          `json:"nodes"`
-	Ports     map[string]portSpec `json:"ports"`
-	Notes     string              `json:"notes"`
+	Title        string              `json:"title"`
+	Namespace    string              `json:"namespace"`
+	Source       sourceSpec          `json:"source"`
+	Nodes        []nodeSpec          `json:"nodes"`
+	Ports        map[string]portSpec `json:"ports"`
+	ControlPlane controlPlaneSpec    `json:"controlPlane"`
+	Notes        string              `json:"notes"`
 }
 
 type sourceSpec struct {
@@ -163,6 +164,100 @@ type faultSpec struct {
 type portSpec struct {
 	Legend string `json:"legend"`
 	Up     string `json:"up"`
+}
+
+// The control plane is the layer under the apps: boxes for what reads the
+// apps and for where the findings go, and the links between the boxes.
+type controlPlaneSpec struct {
+	Title string     `json:"title"`
+	Note  string     `json:"note"`
+	Boxes []boxSpec  `json:"boxes"`
+	Links []linkSpec `json:"links"`
+}
+
+type boxSpec struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Sub   string `json:"sub"`
+	Icon  string `json:"icon"`
+	// The kind of port whose line runs into the box.
+	Reads  string      `json:"reads"`
+	Wide   bool        `json:"wide"`
+	Access *accessSpec `json:"access"`
+	Stages []stageSpec `json:"stages"`
+	Rows   []rowSpec   `json:"rows"`
+	List   *listSpec   `json:"list"`
+}
+
+type accessSpec struct {
+	Label string `json:"label"`
+	Title string `json:"title"`
+	Write bool   `json:"write"`
+}
+
+// stateSpec holds the expressions that give a stage or a row its state, and
+// the texts it has for a state. The first of failed, active, ok and set that
+// answers a value above 0 wins; up stands for a health check on its own.
+// With none above 0 the entry is idle, and needs says what that reading
+// leans on: the idle text is used only while needs answers a value above 0.
+type stateSpec struct {
+	Up         string `json:"up"`
+	Failed     string `json:"failed"`
+	Active     string `json:"active"`
+	OK         string `json:"ok"`
+	Set        string `json:"set"`
+	Needs      string `json:"needs"`
+	IdleText   string `json:"idleText"`
+	ActiveText string `json:"activeText"`
+	FailedText string `json:"failedText"`
+}
+
+type stageSpec struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Title string `json:"title"`
+	stateSpec
+}
+
+type rowSpec struct {
+	ID    string    `json:"id"`
+	Label string    `json:"label"`
+	Text  string    `json:"text"`
+	Icon  string    `json:"icon"`
+	Info  *infoSpec `json:"info"`
+	stateSpec
+}
+
+type infoSpec struct {
+	Expr string `json:"expr"`
+	Text string `json:"text"`
+}
+
+// A list shows the samples of expr. With no sample it says "none" only
+// while needs answers a value above 0. tagText says what a row's tag is.
+type listSpec struct {
+	Title   string `json:"title"`
+	Scope   string `json:"scope"`
+	Expr    string `json:"expr"`
+	Needs   string `json:"needs"`
+	Limit   int    `json:"limit"`
+	Empty   string `json:"empty"`
+	TagText string `json:"tagText"`
+}
+
+// A link is live while active answers a value above 0 and ready while ok
+// does. Otherwise it is off, and says so only while needs answers a value
+// above 0. activeText is its word while live.
+type linkSpec struct {
+	ID         string `json:"id"`
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Label      string `json:"label"`
+	Title      string `json:"title"`
+	Active     string `json:"active"`
+	OK         string `json:"ok"`
+	Needs      string `json:"needs"`
+	ActiveText string `json:"activeText"`
 }
 
 var (
@@ -438,6 +533,203 @@ func TestTopologyIsValid(t *testing.T) {
 	}
 	if topo.Ports["scan"].Up == "" {
 		t.Error("ports.scan needs an up expression: the scan port is the same for every node")
+	}
+
+	t.Run("controlPlane", func(t *testing.T) { checkControlPlane(t, topo) })
+}
+
+func checkControlPlane(t *testing.T, topo topologySpec) {
+	plane := topo.ControlPlane
+	if plane.Title == "" || plane.Note == "" {
+		t.Error("the control plane needs a title and a note")
+	}
+	if len(plane.Boxes) < 3 {
+		t.Errorf("%d boxes, want what reads the apps and where the findings go: at least 3", len(plane.Boxes))
+	}
+
+	boxes := map[string]bool{}
+	readers := map[string]string{}
+	for _, b := range plane.Boxes {
+		t.Run(b.ID, func(t *testing.T) {
+			if b.ID == "" || boxes[b.ID] {
+				t.Errorf("box id %q is empty or used twice", b.ID)
+			}
+			boxes[b.ID] = true
+			if b.Label == "" || b.Icon == "" {
+				t.Errorf("box needs a label and an icon: label = %q, icon = %q", b.Label, b.Icon)
+			}
+			if b.Reads != "" {
+				if _, ok := topo.Ports[b.Reads]; !ok {
+					t.Errorf("reads = %q, which is not defined under topology.ports", b.Reads)
+				}
+				if other, taken := readers[b.Reads]; taken {
+					t.Errorf("reads = %q, which %q reads already: a kind of port has one line", b.Reads, other)
+				}
+				readers[b.Reads] = b.ID
+			}
+			if a := b.Access; a != nil && (a.Label == "" || a.Title == "") {
+				t.Errorf("access needs a label and a title: %+v", *a)
+			}
+
+			stages := map[string]bool{}
+			for _, s := range b.Stages {
+				checkEntry(t, "stage", s.ID, s.Label, stages)
+				checkState(t, "stage "+s.ID, s.stateSpec)
+			}
+			rows := map[string]bool{}
+			for _, r := range b.Rows {
+				checkEntry(t, "row", r.ID, r.Label, rows)
+				checkState(t, "row "+r.ID, r.stateSpec)
+				if r.Info != nil && (strings.TrimSpace(r.Info.Expr) == "" || r.Info.Text == "") {
+					t.Errorf("row %s: info needs an expr and a text: %+v", r.ID, *r.Info)
+				}
+			}
+			if l := b.List; l != nil {
+				if strings.TrimSpace(l.Expr) == "" || l.Title == "" || l.Empty == "" {
+					t.Errorf("list needs an expr, a title and an empty text: %+v", *l)
+				}
+				if l.Limit < 1 {
+					t.Errorf("list.limit = %d, want at least 1", l.Limit)
+				}
+			}
+		})
+	}
+
+	links := map[string]bool{}
+	for _, l := range plane.Links {
+		checkEntry(t, "link", l.ID, l.Label, links)
+		if !boxes[l.From] || !boxes[l.To] || l.From == l.To {
+			t.Errorf("link %s runs from %q to %q, want two boxes of the control plane", l.ID, l.From, l.To)
+		}
+		if strings.TrimSpace(l.Active) == "" && strings.TrimSpace(l.OK) == "" {
+			t.Errorf("link %s needs an active or an ok expression", l.ID)
+		}
+		if l.ActiveText != "" && strings.TrimSpace(l.Active) == "" {
+			t.Errorf("link %s has an activeText and no active expression", l.ID)
+		}
+	}
+
+	for _, problem := range idleWordsWithoutNeeds(plane) {
+		t.Error(problem)
+	}
+}
+
+// idleWordsWithoutNeeds lists the entries of the control plane that would
+// say something about the cluster with nothing behind it. An idle text such
+// as "off", the word "off" of a link and the word "none" of an empty list
+// need a needs expression: without one they would be said also while
+// whatever reports the thing is down. The idle text "no data" claims
+// nothing.
+func idleWordsWithoutNeeds(plane controlPlaneSpec) []string {
+	blank := func(expr string) bool { return strings.TrimSpace(expr) == "" }
+	var problems []string
+	claims := func(name string, s stateSpec) {
+		if s.IdleText != "" && s.IdleText != "no data" && blank(s.Needs) {
+			problems = append(problems, fmt.Sprintf("%s has the idle text %q and no needs expression to back it", name, s.IdleText))
+		}
+	}
+	for _, b := range plane.Boxes {
+		for _, s := range b.Stages {
+			claims("box "+b.ID+", stage "+s.ID, s.stateSpec)
+		}
+		for _, r := range b.Rows {
+			claims("box "+b.ID+", row "+r.ID, r.stateSpec)
+		}
+		if b.List != nil && blank(b.List.Needs) {
+			problems = append(problems, fmt.Sprintf("box %s: its list says \"none\" and has no needs expression to back it", b.ID))
+		}
+	}
+	for _, l := range plane.Links {
+		if blank(l.Needs) {
+			problems = append(problems, fmt.Sprintf("link %s says \"off\" and has no needs expression to back it", l.ID))
+		}
+	}
+	return problems
+}
+
+// A copy of the control plane that drops the needs of one link or of the
+// list fails the rule above: either would then say "off" or "none" while
+// kube-state-metrics is down.
+func TestIdleWordsWithoutNeedsAreCaught(t *testing.T) {
+	shipped := loadDashboard(t).Topology.ControlPlane
+	if problems := idleWordsWithoutNeeds(shipped); len(problems) > 0 {
+		t.Fatalf("the shipped control plane: %v", problems)
+	}
+	// clone copies the plane through JSON, so that a change to the copy
+	// leaves the shipped one alone.
+	clone := func() controlPlaneSpec {
+		raw, err := json.Marshal(shipped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plane controlPlaneSpec
+		if err := json.Unmarshal(raw, &plane); err != nil {
+			t.Fatal(err)
+		}
+		return plane
+	}
+	drops := map[string]func(*controlPlaneSpec){}
+	for at, l := range shipped.Links {
+		drops["link "+l.ID] = func(p *controlPlaneSpec) { p.Links[at].Needs = "" }
+	}
+	for at, b := range shipped.Boxes {
+		if b.List != nil {
+			drops["list of "+b.ID] = func(p *controlPlaneSpec) { p.Boxes[at].List.Needs = "" }
+		}
+		for st, s := range b.Stages {
+			if s.Needs != "" && s.IdleText != "" && s.IdleText != "no data" {
+				drops["stage "+s.ID] = func(p *controlPlaneSpec) { p.Boxes[at].Stages[st].Needs = "" }
+			}
+		}
+	}
+	if len(drops) < 3 {
+		t.Fatalf("%d entries to drop, want both links and the list at least", len(drops))
+	}
+	for name, drop := range drops {
+		plane := clone()
+		drop(&plane)
+		if len(idleWordsWithoutNeeds(plane)) == 0 {
+			t.Errorf("without the needs of %s the rule finds nothing", name)
+		}
+	}
+}
+
+// checkEntry checks the id and the label of a stage, a row or a link. seen
+// holds the ids of its kind so far.
+func checkEntry(t *testing.T, kind, id, label string, seen map[string]bool) {
+	t.Helper()
+	if id == "" || seen[id] {
+		t.Errorf("%s id %q is empty or used twice", kind, id)
+	}
+	seen[id] = true
+	if label == "" {
+		t.Errorf("%s %s has no label", kind, id)
+	}
+}
+
+// checkState checks that a stage or a row says how it gets its state: with
+// up, or with at least one of failed, active, ok and set, never both. A text for
+// a state the entry cannot be in is a mistake as well.
+func checkState(t *testing.T, name string, s stateSpec) {
+	t.Helper()
+	asked := 0
+	for _, expr := range []string{s.Failed, s.Active, s.OK, s.Set} {
+		if strings.TrimSpace(expr) != "" {
+			asked++
+		}
+	}
+	short := strings.TrimSpace(s.Up) != ""
+	switch {
+	case short && asked > 0:
+		t.Errorf("%s has up together with failed, active, ok or set: use one or the other", name)
+	case !short && asked == 0:
+		t.Errorf("%s needs up, or at least one of failed, active, ok and set", name)
+	}
+	if s.ActiveText != "" && strings.TrimSpace(s.Active) == "" {
+		t.Errorf("%s has an activeText and no active expression", name)
+	}
+	if s.FailedText != "" && !short && strings.TrimSpace(s.Failed) == "" {
+		t.Errorf("%s has a failedText and neither up nor a failed expression", name)
 	}
 }
 
